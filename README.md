@@ -1,5 +1,6 @@
 # Debian-Konfigurace
 Zprovozní desktopové prostředí na čistém Debianu
+
 Po dokončení instalace:
   su -
   apt install git
