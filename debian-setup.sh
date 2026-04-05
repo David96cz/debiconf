@@ -42,11 +42,11 @@ fi
 
 # --- 4. PŘÍPRAVA CORE BALÍČKŮ PODLE DESKTOPU ---
 if [ "$DESKTOP_ENV" == "PLASMA" ]; then
-    CORE_PACKAGES="plasma-desktop sddm xorg konsole dolphin"
+    CORE_PACKAGES="plasma-desktop sddm xorg konsole dolphin network-manager plasma-nm"
     SDDM_SESSION="plasma"
 elif [ "$DESKTOP_ENV" == "LXQT" ]; then
-    # Změna z SDDM na LightDM. Žádný KDE závislosti se nekonají.
-    CORE_PACKAGES="lxqt-core lightdm xorg pcmanfm-qt qterminal arc-theme papirus-icon-theme"
+    # Zadrátovaný nativní network-manager a nm-tray applet
+    CORE_PACKAGES="lxqt-core lightdm xorg pcmanfm-qt qterminal arc-theme papirus-icon-theme network-manager nm-tray"
 fi
 
 # --- 5. FILTRACE NEEXISTUJÍCÍCH BALÍKŮ ---
