@@ -1,9 +1,11 @@
 [SETTINGS]
 LOW_PC=TRUE
 GRUB_TIMEOUT=0
+BOOT_LOGO=TRUE # Skryje textový výpis při startu a ukáže logo
+# --- SDDM (Přihlašování) ---
 AUTOLOGIN=FALSE
-RELOGIN=FALSE # Přihlásit okamžitě po odhlášení
-CONFIRM_LOGOUT=FALSE # Vypne ten otravnej dialog při vypínání/restartu
+RELOGIN=FALSE
+CONFIRM_LOGOUT=FALSE
 
 [INSTALL]
 BROWSER_URL=https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
@@ -17,4 +19,3 @@ plasma-nm
 wget
 htop
 vlc
-# Tady si dopiš co dalšího chceš

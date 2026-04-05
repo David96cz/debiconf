@@ -11,10 +11,11 @@ PACKAGES=$(sed -n '/^\[INSTALL\]/,/^\[/p' setup-config.txt | grep -v '\[.*\]' | 
 
 LOW_PC=$(grep -i "^LOW_PC=" setup-config.txt | cut -d'=' -f2 | tr '[:lower:]' '[:upper:]')
 TIMEOUT=$(grep -i "^GRUB_TIMEOUT=" setup-config.txt | cut -d'=' -f2)
+BOOT_LOGO=$(grep -i "^BOOT_LOGO=" setup-config.txt | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
 BROWSER_URL=$(grep -i "^BROWSER_URL=" setup-config.txt | cut -d'=' -f2-)
 
 AUTOLOGIN=$(grep -i "^AUTOLOGIN=" setup-config.txt | cut -d'=' -f2 | tr '[:lower:]' '[:upper:]')
-RELOGIN=$(grep -i "^RELOGIN=" setup-config.txt | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]') # cut odstraní případný komentář
+RELOGIN=$(grep -i "^RELOGIN=" setup-config.txt | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
 CONFIRM_LOGOUT=$(grep -i "^CONFIRM_LOGOUT=" setup-config.txt | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
 
 # --- 3. INSTALACE VŠEHO BALASTU ---
@@ -52,7 +53,7 @@ fi
 echo "Mažu starou síť z interfaces, ať to sežere NetworkManager v Plasmě..."
 echo -e "auto lo\niface lo inet loopback" > /etc/network/interfaces
 
-# --- 7. ÚPRAVY PLASMY PRO UŽIVATELE (Ořezání a Vypínání) ---
+# --- 7. ÚPRAVY PLASMY PRO UŽIVATELE ---
 echo "Aplikuji uživatelská nastavení Plasmy pro $REAL_USER..."
 
 if [ "$LOW_PC" == "TRUE" ]; then
@@ -69,7 +70,17 @@ if [ "$CONFIRM_LOGOUT" == "FALSE" ]; then
     su - $REAL_USER -c "kwriteconfig6 --file ksmserverrc --group General --key confirmLogout false"
 fi
 
-# --- 8. GRUB A REBOOT ---
+# --- 8. GRAFICKÝ BOOT LOGO (Plymouth) ---
+if [ "$BOOT_LOGO" == "TRUE" ]; then
+    echo "Skrývám terminál při startu a nahazuju Plymouth logo..."
+    apt install -y plymouth plymouth-themes
+    # Změní parametr jádra z "quiet" na "quiet splash" (splash zapne grafiku)
+    sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="quiet"/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"/' /etc/default/grub
+    # Aplikuje moderní výchozí motiv (spinner) a přebuduje startovací obraz (initramfs)
+    plymouth-set-default-theme -R spinner
+fi
+
+# --- 9. GRUB A REBOOT ---
 echo "Zkracuju GRUB na $TIMEOUT sekund..."
 sed -i "s/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=$TIMEOUT/" /etc/default/grub
 update-grub
