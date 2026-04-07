@@ -21,7 +21,7 @@ BASE_DIR="$(dirname "$(realpath "$0")")"
 CONTENTS_DIR="$BASE_DIR/.contents"
 GLOBAL_CONFIG="$BASE_DIR/setup-config.txt"
 
-# --- 3. NAČTENÍ GLOBÁLNÍ KONFIGURACE A DEFAULTŮ ---
+# --- 3. NAČTENÍ GLOBÁLNÍ KONFIGURACE A VOLBA PROSTŘEDÍ ---
 echo "Validuji globální konfiguraci ze setup-config.txt..."
 
 if [ ! -f "$GLOBAL_CONFIG" ]; then
@@ -29,12 +29,26 @@ if [ ! -f "$GLOBAL_CONFIG" ]; then
     exit 1
 fi
 
-DESKTOP_ENV=$(grep -i "^DESKTOP_ENV=" "$GLOBAL_CONFIG" | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
-if [ "$DESKTOP_ENV" != "PLASMA" ] && [ "$DESKTOP_ENV" != "LXQT" ]; then
-    echo "Neznámé nebo prázdné DESKTOP_ENV. Vynucuji default: PLASMA"
-    DESKTOP_ENV="PLASMA"
-fi
+# --- INTERAKTIVNÍ VOLBA PROSTŘEDÍ ---
+echo "--------------------------------------------------"
+echo "VOLBA DESKTOPOVÉHO PROSTŘEDÍ"
+echo "1) KDE Plasma
+echo "2) LXQT (Ready out of the box)"
+echo "--------------------------------------------------"
+read -p "Vyber číslo (default 2): " ENV_CHOICE
 
+case $ENV_CHOICE in
+    1)
+        DESKTOP_ENV="PLASMA"
+        ;;
+    2|*)
+        DESKTOP_ENV="LXQT"
+        ;;
+esac
+
+echo "Vybráno prostředí: $DESKTOP_ENV"
+
+# Dočtení zbytku hodnot z texťáku (už bez DESKTOP_ENV)
 BROWSER_URL=$(grep -i "^BROWSER_URL=" "$GLOBAL_CONFIG" | cut -d'=' -f2-)
 BOOT_LOGO=$(grep -i "^BOOT_LOGO=" "$GLOBAL_CONFIG" | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
 LOW_PC=$(grep -i "^LOW_PC=" "$GLOBAL_CONFIG" | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
@@ -223,19 +237,8 @@ if [ "$DESKTOP_ENV" == "LXQT" ]; then
     done
 
     # =========================================================
-    # TVOJE TVRDÉ LXQT A XFWM4 NASTAVENÍ + ePAPIRUS
+    # TVOJE TVRDÉ LXQT A XFWM4 NASTAVENÍ
     # =========================================================
-
-    # Stažení a instalace ePapirus ikon z GitHubu
-    echo "Instaluji přesnou verzi ePapirus ikon..."
-    cd /tmp
-    git clone https://github.com/PapirusDevelopmentTeam/papirus-icon-theme.git
-    cd papirus-icon-theme
-    git checkout $(git rev-list -n 1 --before="2022-06-01" HEAD)
-    cp -r ePapirus /usr/share/icons/
-    cp -r ePapirus-Dark /usr/share/icons/
-    cd /tmp
-    rm -rf papirus-icon-theme
 
     # XFWM4 nastavení (layout a chování)
     echo "Aplikuji tvůj XFWM4 layout..."
@@ -263,7 +266,7 @@ EOF
         echo "Zapisuji pevný lxqt.conf..."
         cat <<EOF > "$LXQT_CONF"
 [General]
-icon_theme=ePapirus
+icon_theme=Papirus
 theme=Lubuntu-Arc
 themeOverridesWallpaper=false
 EOF
