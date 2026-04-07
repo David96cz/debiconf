@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-# DEBICONF - NEPRŮSTŘELNÁ VERZE S FOR CYKLEM
+# DEBICONF - ULTIMATE DEBIAN SETUP (S LXQT TWEAKY Z LUBUNTU)
 # ==============================================================================
 
 if [ "$EUID" -ne 0 ]; then
@@ -126,7 +126,7 @@ if [ "$AUTOLOGIN_REQ" == "TRUE" ]; then
     fi
 fi
 
-# --- 6. SYSTÉMOVÉ FINÁLE ---
+# --- 6. SYSTÉMOVÉ FINÁLE A TWEAKY (SPOJENO) ---
 sed -i 's/^# cs_CZ.UTF-8 UTF-8/cs_CZ.UTF-8 UTF-8/' /etc/locale.gen
 locale-gen
 update-locale LANG=cs_CZ.UTF-8 LC_ALL=cs_CZ.UTF-8
@@ -138,7 +138,7 @@ usermod -aG audio,pulse,pulse-access,video,plugdev $REAL_USER
 mkdir -p /etc/polkit-1/rules.d
 echo 'polkit.addRule(function(action, subject) { if ((action.id == "org.freedesktop.udisks2.filesystem-mount-system" || action.id == "org.freedesktop.udisks2.filesystem-mount") && subject.isInGroup("sudo")) { return polkit.Result.YES; } });' > /etc/polkit-1/rules.d/50-udisks2-automount.rules
 
-# Touchpad - Kompletní pravidla (vyřeší ClickFinger)
+# Touchpad (X11)
 mkdir -p /etc/X11/xorg.conf.d
 cat > /etc/X11/xorg.conf.d/40-libinput-touchpad.conf << 'EOF'
 Section "InputClass"
@@ -154,12 +154,12 @@ EndSection
 EOF
 
 if [ "$DESKTOP_ENV" == "LXQT" ]; then
+    # --- XFWM4 ---
     mkdir -p "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
     echo '<?xml version="1.0" encoding="UTF-8"?><channel name="xfwm4" version="1.0"><property name="general" type="empty"><property name="theme" type="string" value="Default"/><property name="button_layout" type="string" value="O|HMC"/><property name="title_alignment" type="string" value="center"/><property name="tile_on_move" type="bool" value="true"/></property></channel>' > "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml"
     
+    # --- LXQT.CONF (ČEŠTINA A LOGOUT) ---
     [[ "$CONFIRM_LOGOUT" == "TRUE" ]] && CONF_OUT="true" || CONF_OUT="false"
-    
-    # LXQT.conf s VYNUCOVÁNÍM ČEŠTINY
     cat <<EOF > "$USER_HOME/.config/lxqt/lxqt.conf"
 [General]
 __userfile__=true
@@ -172,6 +172,74 @@ language=cs_CZ
 style=Breeze
 EOF
 
+    # --- KLÁVESOVÉ ZKRATKY ---
+    SHORTCUTS_CONF="$USER_HOME/.config/lxqt/globalkeyshortcuts.conf"
+    mkdir -p "$(dirname "$SHORTCUTS_CONF")"
+    
+    if [ ! -s "$SHORTCUTS_CONF" ]; then
+        cp /usr/share/lxqt/globalkeyshortcuts.conf "$SHORTCUTS_CONF" 2>/dev/null || touch "$SHORTCUTS_CONF"
+    fi
+
+    if ! grep -q "flameshot" "$SHORTCUTS_CONF" 2>/dev/null; then
+        cat >> "$SHORTCUTS_CONF" << 'EOF'
+
+[Meta%2BShift%2BS.99]
+Comment=Výstřižky (Flameshot)
+Enabled=true
+Exec=flameshot, gui
+EOF
+    fi
+
+    if ! grep -q "htop" "$SHORTCUTS_CONF" 2>/dev/null; then
+        cat >> "$SHORTCUTS_CONF" << 'EOF'
+
+[Control%2BShift%2BEscape.99]
+Comment=Správce úloh (Htop)
+Enabled=true
+Exec=qterminal, -e, htop
+EOF
+    fi
+
+    if ! grep -q "copyq show" "$SHORTCUTS_CONF" 2>/dev/null; then
+        cat >> "$SHORTCUTS_CONF" << 'EOF'
+
+[Meta%2BV.99]
+Comment=CopyQ show
+Enabled=true
+Exec=copyq, show
+EOF
+    fi
+
+    # Jas
+    sed -i 's/lxqt-config-brightness/brightness.sh/g' "$SHORTCUTS_CONF"
+    chmod +s $(which brightnessctl) 2>/dev/null
+
+    # --- QTERMINAL (Velikost okna) ---
+    QTERM_DIR="$USER_HOME/.config/qterminal.org"
+    mkdir -p "$QTERM_DIR"
+    QTERM_CONF="$QTERM_DIR/qterminal.ini"
+
+    if [ ! -f "$QTERM_CONF" ] || ! grep -q "^\[General\]" "$QTERM_CONF"; then
+        echo -e "\n[General]" >> "$QTERM_CONF"
+    fi
+    sed -i '/^[sS]howTerminalSizeHint/d' "$QTERM_CONF"
+    sed -i '/^\[General\]/a showTerminalSizeHint=false' "$QTERM_CONF"
+
+    # --- TISK V MENU ---
+    ACTION_DIR="$USER_HOME/.local/share/file-manager/actions"
+    mkdir -p "$ACTION_DIR"
+    cat > "$ACTION_DIR/tisk.desktop" << 'EOF'
+[Desktop Entry]
+Type=Action
+Name=Vytisknout...
+Icon=printer
+Profiles=profile-zero;
+[X-Action-Profile profile-zero]
+MimeTypes=image/*;application/pdf;text/plain;
+Exec=/usr/local/bin/tisk-cz %f
+EOF
+
+    # --- BUSY LAUNCH & SKRÝVÁNÍ APLIKACÍ ---
     WRAPPER_BIN="$USER_HOME/.local/bin/busy-launch.py"
     mkdir -p "$USER_HOME/.local/share/applications"
     
@@ -195,11 +263,8 @@ EOF
         fi
     done
 
-    # --- IKONY DO PANELU (Quicklaunch) ---
-    echo "Nastavuji ikony do panelu (Správce souborů + Prohlížeč)..."
+    # --- IKONY DO PANELU ---
     PANEL_CONF="$USER_HOME/.config/lxqt/panel.conf"
-    
-    # Zjištění správného .desktop souboru podle výběru prohlížeče
     case $BROWSER_CHOICE in
         1) BROWSER_APP="google-chrome.desktop" ;;
         2) BROWSER_APP="chromium.desktop" ;;
@@ -209,10 +274,7 @@ EOF
     esac
 
     if [ -f "$PANEL_CONF" ]; then
-        # Bezpečné vymazání starých ikon v panelu (smaže řádky začínající na apps\)
         sed -i '/^apps\\/d' "$PANEL_CONF"
-        
-        # Vložení správce souborů a prohlížeče (pokud je zvolen)
         if grep -q "^\[quicklaunch\]" "$PANEL_CONF"; then
             if [ -n "$BROWSER_APP" ]; then
                 sed -i "/^\[quicklaunch\]/a apps\\\\1\\\\desktop=/usr/share/applications/pcmanfm-qt.desktop\napps\\\\2\\\\desktop=/usr/share/applications/$BROWSER_APP\napps\\\\size=2" "$PANEL_CONF"
@@ -222,7 +284,15 @@ EOF
         fi
     fi
 
+    # Aplikování práv na vytvořené konfigy
     chown -R $REAL_USER:$REAL_USER "$USER_HOME/.config" "$USER_HOME/.local"
+fi
+
+# --- NUMLOCK PRO LIGHTDM ---
+if [ "$DESKTOP_ENV" == "LXQT" ]; then
+    # Instalace greeter settings (pokud není) a zapnutí numlocku
+    apt install -y numlockx lightdm-gtk-greeter-settings >/dev/null 2>&1
+    sed -i 's/^#greeter-setup-script=.*/greeter-setup-script=\/usr\/bin\/numlockx on/' /etc/lightdm/lightdm.conf 2>/dev/null
 fi
 
 # --- 7. POJISTKA PRO GUI ---
