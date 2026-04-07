@@ -32,7 +32,7 @@ fi
 # --- INTERAKTIVNÍ VOLBA PROSTŘEDÍ ---
 echo "--------------------------------------------------"
 echo "VOLBA DESKTOPOVÉHO PROSTŘEDÍ"
-echo "1) KDE Plasma
+echo "1) KDE Plasma"
 echo "2) LXQT (Ready out of the box)"
 echo "--------------------------------------------------"
 read -p "Vyber číslo (default 2): " ENV_CHOICE
