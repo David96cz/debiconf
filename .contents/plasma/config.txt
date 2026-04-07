@@ -1,0 +1,15 @@
+[CORE_PACKAGES]
+plasma-desktop
+sddm
+xorg
+konsole
+dolphin
+network-manager
+plasma-nm
+
+[EXTRA_PACKAGES]
+# Balíčky specifické jen pro Plasmu (když je prázdno, nic se neděje)
+
+
+[APPS_TO_HIDE]
+# Aplikace, které chceš v menu Plasmy skrýt (např. balast)

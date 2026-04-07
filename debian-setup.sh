@@ -1,146 +1,236 @@
 #!/bin/bash
 
+# ==============================================================================
+# DEBIAN ULTIMATE SETUP SCRIPT (PLASMA / LXQT)
+# ==============================================================================
+
 # --- 1. DETEKCE UŽIVATELE A SUDO PRÁVA ---
+if [ "$EUID" -ne 0 ]; then
+    echo "Prosím, spusťte skript s právy root (sudo)."
+    exit 1
+fi
+
 REAL_USER=$(ls /home | head -n 1)
+USER_HOME="/home/$REAL_USER"
 echo "Našel jsem složku uživatele: $REAL_USER. Dávám mu sudo práva..."
-apt install -y sudo
+apt update && apt install -y sudo curl wget dpkg-dev
 usermod -aG sudo $REAL_USER
 
-# --- 2. NAČTENÍ KONFIGURACE Z TEXTÁKU ---
-PACKAGES=$(sed -n '/^\[INSTALL\]/,/^\[/p' setup-config.txt | grep -v '\[.*\]' | grep -v '^#' | grep -v '=' | xargs)
-BROWSER_URL=$(grep -i "^BROWSER_URL=" setup-config.txt | cut -d'=' -f2-)
+# --- 2. DEFINICE ABSOLUTNÍCH CEST ---
+BASE_DIR="$(dirname "$(realpath "$0")")"
+CONTENTS_DIR="$BASE_DIR/.contents"
+GLOBAL_CONFIG="$BASE_DIR/setup-config.txt"
 
-# --- 3. VYNUCENÍ DEFAULTNÍCH HODNOT (Blbovzdornost) ---
-echo "Validuji konfiguraci z textáku..."
+# --- 3. NAČTENÍ GLOBÁLNÍ KONFIGURACE A DEFAULTŮ ---
+echo "Validuji globální konfiguraci ze setup-config.txt..."
 
-DESKTOP_ENV=$(grep -i "^DESKTOP_ENV=" setup-config.txt | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
+if [ ! -f "$GLOBAL_CONFIG" ]; then
+    echo "KRITICKÁ CHYBA: Globální konfigurace $GLOBAL_CONFIG chybí!"
+    exit 1
+fi
+
+DESKTOP_ENV=$(grep -i "^DESKTOP_ENV=" "$GLOBAL_CONFIG" | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
 if [ "$DESKTOP_ENV" != "PLASMA" ] && [ "$DESKTOP_ENV" != "LXQT" ]; then
     echo "Neznámé nebo prázdné DESKTOP_ENV. Vynucuji default: PLASMA"
     DESKTOP_ENV="PLASMA"
 fi
 
-BOOT_LOGO=$(grep -i "^BOOT_LOGO=" setup-config.txt | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
-if [ "$BOOT_LOGO" != "FALSE" ]; then BOOT_LOGO="TRUE"; fi
+BROWSER_URL=$(grep -i "^BROWSER_URL=" "$GLOBAL_CONFIG" | cut -d'=' -f2-)
+BOOT_LOGO=$(grep -i "^BOOT_LOGO=" "$GLOBAL_CONFIG" | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
+LOW_PC=$(grep -i "^LOW_PC=" "$GLOBAL_CONFIG" | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
+AUTOLOGIN=$(grep -i "^AUTOLOGIN=" "$GLOBAL_CONFIG" | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
+TIMEOUT=$(grep -i "^GRUB_TIMEOUT=" "$GLOBAL_CONFIG" | cut -d'=' -f2 | cut -d' ' -f1)
 
-LOW_PC=$(grep -i "^LOW_PC=" setup-config.txt | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
-if [ "$LOW_PC" != "TRUE" ]; then LOW_PC="FALSE"; fi
+if ! [[ "$TIMEOUT" =~ ^[0-9]+$ ]]; then TIMEOUT="0"; fi
 
-AUTOLOGIN=$(grep -i "^AUTOLOGIN=" setup-config.txt | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
-if [ "$AUTOLOGIN" != "TRUE" ]; then AUTOLOGIN="FALSE"; fi
+# --- 4. NAČTENÍ SPECIFIK PROSTŘEDÍ (Z LOKÁLNÍHO CONFIGU) ---
+LOCAL_CONFIG_DIR="$CONTENTS_DIR/$(echo $DESKTOP_ENV | tr '[:upper:]' '[:lower:]')"
+LOCAL_CONFIG="$LOCAL_CONFIG_DIR/config.txt"
 
-RELOGIN=$(grep -i "^RELOGIN=" setup-config.txt | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
-if [ "$RELOGIN" != "TRUE" ]; then RELOGIN="FALSE"; fi
-
-CONFIRM_LOGOUT=$(grep -i "^CONFIRM_LOGOUT=" setup-config.txt | cut -d'=' -f2 | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
-if [ "$CONFIRM_LOGOUT" != "TRUE" ]; then CONFIRM_LOGOUT="FALSE"; fi
-
-TIMEOUT=$(grep -i "^GRUB_TIMEOUT=" setup-config.txt | cut -d'=' -f2 | cut -d' ' -f1)
-if ! [[ "$TIMEOUT" =~ ^[0-9]+$ ]]; then
-    echo "Neplatný nebo prázdný GRUB_TIMEOUT. Vynucuji default: 0"
-    TIMEOUT="0"
+if [ ! -f "$LOCAL_CONFIG" ]; then
+    echo "KRITICKÁ CHYBA: Konfigurace prostředí $LOCAL_CONFIG chybí!"
+    exit 1
 fi
 
-# --- 4. PŘÍPRAVA CORE BALÍČKŮ PODLE DESKTOPU ---
-if [ "$DESKTOP_ENV" == "PLASMA" ]; then
-    CORE_PACKAGES="plasma-desktop sddm xorg konsole dolphin network-manager plasma-nm"
-    SDDM_SESSION="plasma"
-elif [ "$DESKTOP_ENV" == "LXQT" ]; then
-    # Zadrátovaný nativní network-manager a nm-tray applet
-    CORE_PACKAGES="lxqt-core lightdm xorg pcmanfm-qt qterminal arc-theme papirus-icon-theme network-manager nm-tray"
-fi
+echo "Načítám specifikace pro $DESKTOP_ENV..."
+CORE_PACKAGES=$(sed -n '/^\[CORE_PACKAGES\]/,/^\[/p' "$LOCAL_CONFIG" | grep -v '^\[.*\]' | grep -vE '^\s*#|^\s*$' | xargs)
+EXTRA_PACKAGES=$(sed -n '/^\[EXTRA_PACKAGES\]/,/^\[/p' "$LOCAL_CONFIG" | grep -v '^\[.*\]' | grep -vE '^\s*#|^\s*$' | xargs)
+APPS_TO_HIDE_STR=$(sed -n '/^\[APPS_TO_HIDE\]/,/^\[/p' "$LOCAL_CONFIG" | grep -v '^\[.*\]' | grep -vE '^\s*#|^\s*$' | xargs)
+read -r -a APPS_TO_HIDE <<< "$APPS_TO_HIDE_STR"
 
-# --- 5. FILTRACE NEEXISTUJÍCÍCH BALÍKŮ ---
+ALL_PACKAGES="$CORE_PACKAGES $EXTRA_PACKAGES"
+
+# --- 5. INSTALACE BALÍKŮ (S FILTRACÍ CHYBĚJÍCÍCH) ---
 echo "Filtruji neexistující balíky..."
-ALL_PACKAGES="$CORE_PACKAGES $PACKAGES"
 SAFE_PACKAGES=""
-
 for pkg in $ALL_PACKAGES; do
     if apt-cache show "$pkg" > /dev/null 2>&1; then
         SAFE_PACKAGES="$SAFE_PACKAGES $pkg"
     else
-        echo "⚠️ VAROVÁNÍ: Balíček '$pkg' neexistuje v repozitářích. Přeskakuji ho!"
+        echo " ⚠️ VAROVÁNÍ: Balíček '$pkg' neexistuje. Přeskakuji!"
     fi
 done
 
-if [ -z "$SAFE_PACKAGES" ]; then
-    echo "KRITICKÁ CHYBA: Žádný ze zadaných balíků neexistuje. Končím."
-    exit 1
-fi
-
-# --- 6. INSTALACE SYSTÉMU A APLIKACÍ ---
 echo "Instaluji ověřené balíky..."
-apt install -y $SAFE_PACKAGES
+apt install -y --no-install-recommends $SAFE_PACKAGES
 
-# --- 7. INSTALACE EXTERNÍHO PROHLÍŽEČE ---
 if [ -n "$BROWSER_URL" ]; then
-    echo "Stahuji a instaluji prohlížeč z $BROWSER_URL..."
-    wget -O /tmp/browser.deb "$BROWSER_URL"
+    echo "Stahuji a instaluji prohlížeč..."
+    wget -qO /tmp/browser.deb "$BROWSER_URL"
     apt install -y /tmp/browser.deb
     rm /tmp/browser.deb
 fi
 
-# --- 8. KONFIGURACE PŘIHLAŠOVÁNÍ (SDDM pro Plasmu, LightDM pro LXQt) ---
-echo "Nastavuji přihlašování..."
-
-if [ "$DESKTOP_ENV" == "PLASMA" ]; then
-    mkdir -p /etc/sddm.conf.d
-    if [ "$AUTOLOGIN" == "TRUE" ] || [ "$RELOGIN" == "TRUE" ]; then
-        echo "[Autologin]" > /etc/sddm.conf.d/autologin.conf
-        if [ "$AUTOLOGIN" == "TRUE" ]; then
-            echo "User=$REAL_USER" >> /etc/sddm.conf.d/autologin.conf
-            echo "Session=$SDDM_SESSION" >> /etc/sddm.conf.d/autologin.conf
-        fi
-        if [ "$RELOGIN" == "TRUE" ]; then
-            echo "Relogin=true" >> /etc/sddm.conf.d/autologin.conf
-        fi
+# --- 6. EXTRAKCE LUBUNTU-ARC TÉMATU (POUZE LXQT) ---
+if [ "$DESKTOP_ENV" == "LXQT" ]; then
+    echo "Stahuji originální Lubuntu Arc téma přímo z Ubuntu serverů..."
+    cd /tmp
+    rm -rf lubuntu-rip && mkdir -p lubuntu-rip && cd lubuntu-rip
+    
+    FILE_NAME=$(wget -qO- http://archive.ubuntu.com/ubuntu/pool/universe/l/lubuntu-artwork/ | grep -o 'lubuntu-artwork_[^"]*_all\.deb' | tail -n 1)
+    
+    if [ -n "$FILE_NAME" ]; then
+        wget "http://archive.ubuntu.com/ubuntu/pool/universe/l/lubuntu-artwork/$FILE_NAME" -O lubuntu-artwork.deb
+        dpkg-deb -x lubuntu-artwork.deb root_dir
+        
+        THEMES_DIR="$USER_HOME/.local/share/lxqt/themes"
+        mkdir -p "$THEMES_DIR"
+        cp -r root_dir/usr/share/lxqt/themes/* "$THEMES_DIR/"
+        chown -R $REAL_USER:$REAL_USER "$USER_HOME/.local"
+        echo "   [OK] Lubuntu Arc téma úspěšně aplikováno."
     else
-        rm -f /etc/sddm.conf.d/autologin.conf
+        echo "   [!] CHYBA: Nepodařilo se stáhnout Lubuntu téma."
+    fi
+    cd ~
+    rm -rf /tmp/lubuntu-rip
+fi
+
+# --- 7. NASAZENÍ KONFIGURACÍ A SKRIPTŮ (POUZE LXQT) ---
+if [ "$DESKTOP_ENV" == "LXQT" ]; then
+    echo "Kopíruji lokální .config a .scripts..."
+    
+    CONF_SRC="$LOCAL_CONFIG_DIR/.config"
+    SCRIPTS_SRC="$LOCAL_CONFIG_DIR/.scripts"
+    LXQT_DEST="$USER_HOME/.config/lxqt"
+    PCMANFM_DEST="$USER_HOME/.config/pcmanfm-qt/lxqt"
+    
+    if [ -d "$CONF_SRC" ]; then
+        mkdir -p "$LXQT_DEST" "$PCMANFM_DEST"
+        cp "$CONF_SRC/notifications.conf" "$LXQT_DEST/" 2>/dev/null
+        cp "$CONF_SRC/pcmanfm-qt.conf" "$PCMANFM_DEST/settings.conf" 2>/dev/null
+        cp "$CONF_SRC/panel-26.conf" "$LXQT_DEST/panel.conf" 2>/dev/null
+        cp "$CONF_SRC/panel.conf" "$LXQT_DEST/panel.conf" 2>/dev/null # Fallback
+        cp "$CONF_SRC/session.conf" "$LXQT_DEST/" 2>/dev/null
+        chown -R $REAL_USER:$REAL_USER "$USER_HOME/.config"
+    fi
+
+    if [ -d "$SCRIPTS_SRC" ]; then
+        LOCAL_BIN="$USER_HOME/.local/bin"
+        mkdir -p "$LOCAL_BIN"
+        cp -u "$SCRIPTS_SRC/"*.sh "$LOCAL_BIN/" 2>/dev/null
+        cp -u "$SCRIPTS_SRC/"*.py "$LOCAL_BIN/" 2>/dev/null
+        chmod +x "$LOCAL_BIN/"* 2>/dev/null
+        chown -R $REAL_USER:$REAL_USER "$LOCAL_BIN"
+    fi
+
+    # Binární patch pro panel bez ptáka (pokud existuje)
+    if [ -f "$CONF_SRC/lxqt-panel_amd64_no_about" ]; then
+        mv /usr/bin/lxqt-panel /usr/bin/lxqt-panel.bak
+        cp "$CONF_SRC/lxqt-panel_amd64_no_about" /usr/bin/lxqt-panel
+        chmod +x /usr/bin/lxqt-panel
+        echo "   [OK] Panel binárně patchován."
+    fi
+fi
+
+# --- 8. KONFIGURACE PŘIHLAŠOVÁNÍ ---
+echo "Nastavuji přihlašování..."
+if [ "$DESKTOP_ENV" == "PLASMA" ]; then
+    if [ "$AUTOLOGIN" == "TRUE" ]; then
+        mkdir -p /etc/sddm.conf.d
+        echo -e "[Autologin]\nUser=$REAL_USER\nSession=plasma" > /etc/sddm.conf.d/autologin.conf
     fi
 elif [ "$DESKTOP_ENV" == "LXQT" ]; then
     if [ "$AUTOLOGIN" == "TRUE" ]; then
         mkdir -p /etc/lightdm/lightdm.conf.d
-        echo "[Seat:*]" > /etc/lightdm/lightdm.conf.d/autologin.conf
-        echo "autologin-user=$REAL_USER" >> /etc/lightdm/lightdm.conf.d/autologin.conf
-        echo "autologin-user-timeout=0" >> /etc/lightdm/lightdm.conf.d/autologin.conf
-    else
-        rm -f /etc/lightdm/lightdm.conf.d/autologin.conf
+        echo -e "[Seat:*]\nautologin-user=$REAL_USER\nautologin-user-timeout=0" > /etc/lightdm/lightdm.conf.d/autologin.conf
     fi
 fi
 
-# --- 9. VYMRDÁNÍ SÍTĚ ---
-echo "Mažu starou síť z interfaces..."
+# --- 9. UŽIVATELSKÁ NASTAVENÍ A TWEAKY ---
+echo "Aplikuji uživatelská nastavení..."
+
+# Vyčištění interfaces
 echo -e "auto lo\niface lo inet loopback" > /etc/network/interfaces
 
-# --- 10. ÚPRAVY PRO UŽIVATELE (Podle prostředí) ---
-echo "Aplikuji uživatelská nastavení pro $REAL_USER..."
-
-if [ "$DESKTOP_ENV" == "PLASMA" ]; then
-    if [ "$LOW_PC" == "TRUE" ]; then
-        su - $REAL_USER -c "kwriteconfig6 --file baloofilerc --group 'Basic Settings' --key 'Indexing-Enabled' false"
-        su - $REAL_USER -c "kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled false"
-        su - $REAL_USER -c "kwriteconfig6 --file kwinrc --group Plugins --key kwin4_effect_shadowEnabled false"
-        su - $REAL_USER -c "kwriteconfig6 --file kwinrc --group Plugins --key kwin4_effect_translucencyEnabled false"
-        su - $REAL_USER -c "kwriteconfig6 --file kwinrc --group Compositing --key Enabled false"
-    fi
-
-    if [ "$CONFIRM_LOGOUT" == "FALSE" ]; then
-        su - $REAL_USER -c "kwriteconfig6 --file ksmserverrc --group General --key confirmLogout false"
-    fi
-
-elif [ "$DESKTOP_ENV" == "LXQT" ]; then
-    echo "Předpřipravuji moderní Arc vzhled a Papirus ikony pro LXQt..."
-    mkdir -p /home/$REAL_USER/.config/lxqt
-    
-    cat <<EOF > /home/$REAL_USER/.config/lxqt/lxqt.conf
-[General]
-icon_theme=Papirus
-theme=frost
+# Automount disků
+mkdir -p /etc/polkit-1/rules.d
+cat > /etc/polkit-1/rules.d/50-udisks2-automount.rules << 'EOF'
+polkit.addRule(function(action, subject) {
+    if ((action.id == "org.freedesktop.udisks2.filesystem-mount-system" ||
+         action.id == "org.freedesktop.udisks2.filesystem-mount") &&
+        subject.isInGroup("sudo")) {
+        return polkit.Result.YES;
+    }
+});
 EOF
 
-    chown -R $REAL_USER:$REAL_USER /home/$REAL_USER/.config
+# Touchpad pravidla
+mkdir -p /etc/X11/xorg.conf.d
+cat > /etc/X11/xorg.conf.d/40-libinput-touchpad.conf << 'EOF'
+Section "InputClass"
+    Identifier "libinput touchpad catchall"
+    MatchIsTouchpad "on"
+    Driver "libinput"
+    Option "ClickMethod" "clickfinger"
+    Option "Tapping" "on"
+    Option "NaturalScrolling" "true"
+    Option "AccelProfile" "adaptive"
+    Option "AccelSpeed" "0.0"
+EndSection
+EOF
+
+# Specifika pro LXQt
+if [ "$DESKTOP_ENV" == "LXQT" ]; then
+    USER_APPS_DIR="$USER_HOME/.local/share/applications"
+    mkdir -p "$USER_APPS_DIR"
+    
+    # Skrytí aplikací
+    for app in "${APPS_TO_HIDE[@]}"; do
+        if [ -f "/usr/share/applications/$app" ]; then
+            cp "/usr/share/applications/$app" "$USER_APPS_DIR/$app"
+            if grep -q "^NoDisplay=" "$USER_APPS_DIR/$app"; then
+                sed -i 's/^NoDisplay=.*/NoDisplay=true/' "$USER_APPS_DIR/$app"
+            else
+                echo "NoDisplay=true" >> "$USER_APPS_DIR/$app"
+            fi
+        fi
+    done
+    
+    # QTerminal úprava
+    QTERM_CONF="$USER_HOME/.config/qterminal.org/qterminal.ini"
+    mkdir -p "$(dirname "$QTERM_CONF")"
+    if [ ! -f "$QTERM_CONF" ] || ! grep -q "^\[General\]" "$QTERM_CONF"; then echo -e "\n[General]" >> "$QTERM_CONF"; fi
+    sed -i '/^[sS]howTerminalSizeHint/d' "$QTERM_CONF"
+    sed -i '/^\[General\]/a showTerminalSizeHint=false' "$QTERM_CONF"
+
+    # Zastavení popupů prohlížečů
+    for policy_dir in /etc/opt/chrome/policies/managed /etc/chromium/policies/managed; do
+        mkdir -p "$policy_dir"
+        echo '{"DefaultBrowserSettingEnabled": false}' > "$policy_dir/stop-otravovat.json"
+    done
+
+    # XFWM4 nastavení
+    SESSION_CONF="$USER_HOME/.config/lxqt/session.conf"
+    if [ ! -f "$SESSION_CONF" ]; then
+        echo -e "[General]\nwindow_manager=xfwm4" > "$SESSION_CONF"
+    else
+        sed -i 's/^window_manager=.*/window_manager=xfwm4/' "$SESSION_CONF"
+    fi
+    
+    chown -R $REAL_USER:$REAL_USER "$USER_HOME/.local" "$USER_HOME/.config"
 fi
 
-# --- 11. GRAFICKÝ BOOT LOGO (Plymouth) ---
+# --- 10. PLYMOUTH, GRUB A REBOOT ---
 if [ "$BOOT_LOGO" == "TRUE" ]; then
     echo "Nahazuju Plymouth logo..."
     apt install -y plymouth plymouth-themes
@@ -148,10 +238,12 @@ if [ "$BOOT_LOGO" == "TRUE" ]; then
     plymouth-set-default-theme -R spinner
 fi
 
-# --- 12. GRUB A REBOOT ---
 echo "Zkracuju GRUB na $TIMEOUT sekund..."
 sed -i "s/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=$TIMEOUT/" /etc/default/grub
 update-grub
 
-echo "Všechno hotovo. Systém je ready out of the script. Restartuju!"
+echo "=================================================="
+echo " VŠECHNO HOTOVO! Systém se restartuje za 5 sekund."
+echo "=================================================="
+sleep 5
 reboot

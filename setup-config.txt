@@ -1,16 +1,19 @@
 [SETTINGS]
-DESKTOP_ENV=LXQT # Možnosti: PLASMA nebo LXQT
+DESKTOP_ENV=LXQT
 LOW_PC=FALSE
 GRUB_TIMEOUT=0
 BOOT_LOGO=TRUE
-
-# --- SDDM (Přihlašování) ---
 AUTOLOGIN=TRUE
 RELOGIN=TRUE
 CONFIRM_LOGOUT=TRUE
 
 [INSTALL]
 BROWSER_URL=https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+
+# --- Globální balíčky (nainstalují se všude) ---
 htop
 vlc
-zramtools
+zram-tools
+flameshot
+gdebi
+copyq

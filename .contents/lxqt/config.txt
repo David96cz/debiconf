@@ -1,0 +1,11 @@
+[CORE_PACKAGES]
+lxqt-core lightdm xorg pcmanfm-qt qterminal arc-theme papirus-icon-theme network-manager nm-tray
+
+[EXTRA_PACKAGES]
+xfwm4 xfconf gdebi flameshot htop vlc featherpad icoutils viewnior ffmpegthumbnailer zram-tools gthumb cabextract yad cups-client cups brightnessctl libnotify-bin copyq
+
+[APPS_TO_HIDE]
+lxqt-about.desktop
+qterminal-drop.desktop
+lxqt-lockscreen.desktop
+lxqt-leave.desktop
