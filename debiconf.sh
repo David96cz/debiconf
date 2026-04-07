@@ -63,14 +63,23 @@ LOCAL_CONFIG="$CONTENTS_DIR/$(echo $DESKTOP_ENV | tr '[:upper:]' '[:lower:]')/co
 CORE_PACKAGES=$(sed -n '/^\[CORE_PACKAGES\]/,/^\[/p' "$LOCAL_CONFIG" | grep -v '^\[.*\]' | grep -vE '^\s*#|^\s*$' | xargs)
 ALL_PACKAGES="$CORE_PACKAGES $GLOBAL_PACKAGES"
 
-# Načtení aplikací ke skrytí (připraveno pro sekci 8)
+# Načtení aplikací ke skrytí
 APPS_TO_HIDE_STR=$(sed -n '/^\[APPS_TO_HIDE\]/,/^\[/p' "$LOCAL_CONFIG" | grep -v '^\[.*\]' | grep -vE '^\s*#|^\s*$' | xargs)
 read -r -a APPS_TO_HIDE <<< "$APPS_TO_HIDE_STR"
 
-# --- 3. INSTALACE BALÍKŮ A PROHLÍŽEČE ---
+# --- 3. INSTALACE BALÍKŮ (HROMADNÁ - OPRAVA GUI) ---
+echo "Filtruji neplatné balíčky..."
+VALID_PKGS=""
 for pkg in $ALL_PACKAGES; do
-    apt install -y --no-install-recommends "$pkg" || echo "⚠️ Přeskakuji: $pkg"
+    if apt-cache show "$pkg" >/dev/null 2>&1; then
+        VALID_PKGS="$VALID_PKGS $pkg"
+    else
+        echo "⚠️ Přeskakuji neexistující balík: $pkg"
+    fi
 done
+
+echo "Instaluji vše najednou pro zachování závislostí GUI..."
+apt install -y --no-install-recommends $VALID_PKGS
 
 case $BROWSER_CHOICE in
     1) wget -qO /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt install -y /tmp/chrome.deb ;;
@@ -114,12 +123,19 @@ if [ "$DESKTOP_ENV" == "LXQT" ]; then
     fi
 fi
 
-# --- 5. AUTOLOGIN LOGIKA ---
-if [ "$AUTOLOGIN_REQ" == "TRUE" ]; then
-    if [ "$DESKTOP_ENV" == "PLASMA" ]; then
+# --- 5. AUTOLOGIN A POVOLENÍ GUI SLUŽEB ---
+# Tohle natvrdo donutí Debian najet do grafiky
+systemctl set-default graphical.target
+
+if [ "$DESKTOP_ENV" == "PLASMA" ]; then
+    systemctl enable sddm 2>/dev/null
+    if [ "$AUTOLOGIN_REQ" == "TRUE" ]; then
         mkdir -p /etc/sddm.conf.d
         echo -e "[Autologin]\nUser=$REAL_USER\nSession=plasma\nRelogin=$RELOGIN_REQ" > /etc/sddm.conf.d/autologin.conf
-    else
+    fi
+else
+    systemctl enable lightdm 2>/dev/null
+    if [ "$AUTOLOGIN_REQ" == "TRUE" ]; then
         mkdir -p /etc/lightdm/lightdm.conf.d
         echo -e "[Seat:*]\nautologin-user=$REAL_USER\nautologin-user-timeout=0" > /etc/lightdm/lightdm.conf.d/autologin.conf
     fi
@@ -144,7 +160,7 @@ if [ "$DESKTOP_ENV" == "LXQT" ]; then
     mkdir -p "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
     echo '<?xml version="1.0" encoding="UTF-8"?><channel name="xfwm4" version="1.0"><property name="general" type="empty"><property name="theme" type="string" value="Default"/><property name="button_layout" type="string" value="O|HMC"/><property name="title_alignment" type="string" value="center"/><property name="tile_on_move" type="bool" value="true"/></property></channel>' > "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml"
     
-    # LXQT.CONF s ohledem na Confirm Logout
+    # LXQT.CONF
     [[ "$CONFIRM_LOGOUT" == "TRUE" ]] && CONF_OUT="true" || CONF_OUT="false"
     cat <<EOF > "$USER_HOME/.config/lxqt/lxqt.conf"
 [General]
