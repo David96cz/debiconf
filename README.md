@@ -1,4 +1,4 @@
-# Debian-Konfigurace
+# Debiconf
 Zprovozní desktopové prostředí na čistém Debianu
 
 Po dokončení instalace:
@@ -7,8 +7,8 @@ Po dokončení instalace:
   
   apt install git
   
-  git clone https://github.com/David96cz/Debian-Konfigurace
+  git clone https://github.com/David96cz/Debiconf
   
-  cd Debian-Konfigurace
+  cd Debiconf
   
-  bash debian-setup.sh
+  bash debiconf.sh

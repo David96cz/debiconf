@@ -1,5 +1,5 @@
 [CORE_PACKAGES]
-lxqt-core lightdm xorg pcmanfm-qt qterminal arc-theme papirus-icon-theme network-manager nm-tray lxqt-l10n task-czech task-czech-desktop breeze
+lxqt-core lightdm xorg pcmanfm-qt qterminal arc-theme papirus-icon-theme network-manager nm-tray lxqt-l10n task-czech task-czech-desktop breeze pulseaudio pavucontrol-qt alsa-utils gvfs gvfs-backends gvfs-fuse lxqt-powermanagement upower udisks2 lxqt-policykit lxqt-config lxqt-sudo lxqt-archiver unzip zip p7zip-full blueman bluez lxappearance fonts-ubuntu
 
 [EXTRA_PACKAGES]
 xfwm4 xfconf gdebi flameshot htop vlc featherpad icoutils viewnior ffmpegthumbnailer zram-tools gthumb cabextract yad cups-client cups brightnessctl libnotify-bin copyq
