@@ -129,7 +129,7 @@ fi
 sed -i 's/^# cs_CZ.UTF-8 UTF-8/cs_CZ.UTF-8 UTF-8/' /etc/locale.gen
 locale-gen
 update-locale LANG=cs_CZ.UTF-8 LC_ALL=cs_CZ.UTF-8
-localectl set-locale LANG=cs_CZ.UTF-8 LC_ALL=cs_CZ.UTF-8
+localectl set-locale LANG=cs_CZ.UTF-8
 
 usermod -aG audio,pulse,pulse-access,video,plugdev $REAL_USER
 
