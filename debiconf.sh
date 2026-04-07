@@ -60,6 +60,13 @@ GLOBAL_PACKAGES=$(sed -n '/^\[INSTALL\]/,/^\[/p' "$GLOBAL_CONFIG" | grep -v '^\[
 
 # Balíčky z prostředí
 LOCAL_CONFIG="$CONTENTS_DIR/$(echo $DESKTOP_ENV | tr '[:upper:]' '[:lower:]')/config.txt"
+
+# Pojistka chybějícího configu
+if [ ! -f "$LOCAL_CONFIG" ]; then
+    echo "KRITICKÁ CHYBA: Konfigurace prostředí $LOCAL_CONFIG chybí!"
+    exit 1
+fi
+
 CORE_PACKAGES=$(sed -n '/^\[CORE_PACKAGES\]/,/^\[/p' "$LOCAL_CONFIG" | grep -v '^\[.*\]' | grep -vE '^\s*#|^\s*$' | xargs)
 ALL_PACKAGES="$CORE_PACKAGES $GLOBAL_PACKAGES"
 
@@ -67,10 +74,19 @@ ALL_PACKAGES="$CORE_PACKAGES $GLOBAL_PACKAGES"
 APPS_TO_HIDE_STR=$(sed -n '/^\[APPS_TO_HIDE\]/,/^\[/p' "$LOCAL_CONFIG" | grep -v '^\[.*\]' | grep -vE '^\s*#|^\s*$' | xargs)
 read -r -a APPS_TO_HIDE <<< "$APPS_TO_HIDE_STR"
 
-# --- 3. INSTALACE BALÍKŮ A PROHLÍŽEČE ---
+# --- 3. INSTALACE BALÍKŮ A PROHLÍŽEČE (OPRAVENO PRO GUI) ---
+echo "Kontroluji platnost balíčků..."
+VALID_PKGS=""
 for pkg in $ALL_PACKAGES; do
-    apt install -y --no-install-recommends "$pkg" || echo "⚠️ Přeskakuji: $pkg"
+    if apt-cache show "$pkg" >/dev/null 2>&1; then
+        VALID_PKGS="$VALID_PKGS $pkg"
+    else
+        echo "⚠️ Přeskakuji neexistující: $pkg"
+    fi
 done
+
+echo "Instaluji vše hromadně..."
+apt install -y --no-install-recommends $VALID_PKGS
 
 case $BROWSER_CHOICE in
     1) wget -qO /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt install -y /tmp/chrome.deb ;;
@@ -186,6 +202,15 @@ EOF
     chown -R $REAL_USER:$REAL_USER "$USER_HOME/.config" "$USER_HOME/.local"
 fi
 
+# --- 7. POJISTKA PRO GUI ---
+echo "Zapínám grafický režim..."
+systemctl set-default graphical.target
+if [ "$DESKTOP_ENV" == "PLASMA" ]; then
+    systemctl enable sddm 2>/dev/null
+else
+    systemctl enable lightdm 2>/dev/null
+fi
+
 # Grub & Reboot
 if [ "$BOOT_LOGO" == "TRUE" ]; then
     apt install -y plymouth plymouth-themes
@@ -195,6 +220,8 @@ fi
 sed -i "s/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=$TIMEOUT/" /etc/default/grub
 update-grub
 
-echo "HOTOVO. Restart za 5s."
+echo "=================================================="
+echo " VŠECHNO HOTOVO! Restartuji za 5 sekund."
+echo "=================================================="
 sleep 5
 reboot
