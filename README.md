@@ -1,14 +1,14 @@
 # Debiconf
-Zprovozní desktopové prostředí na čistém Debianu
+Zprovozní desktopové prostředí bez bloatwaru na čistém Debianu
 
-Po dokončení instalace:
+Po dokončení čisté netinst instalace bez prostředí:
 
   su -
   
-  apt install git
+  apt install git -y
   
   git clone https://github.com/David96cz/Debiconf
   
   cd Debiconf
   
-  bash debiconf.sh
+  bash Debiconf.sh

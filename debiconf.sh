@@ -12,8 +12,8 @@ fi
 REAL_USER=$(ls /home | head -n 1)
 USER_HOME="/home/$REAL_USER"
 BASE_DIR="$(dirname "$(realpath "$0")")"
-CONTENTS_DIR="$BASE_DIR/contents"
-GLOBAL_CONFIG="$BASE_DIR/setup-config.txt"
+CONTENTS_DIR="$BASE_DIR/.contents"
+GLOBAL_CONFIG="$CONTENTS_DIR/setup-config.txt"
 
 # --- 1. INTERAKTIVNÍ DOTAZY ---
 echo "--------------------------------------------------"
@@ -65,7 +65,8 @@ if [ ! -f "$LOCAL_CONFIG" ]; then
 fi
 
 CORE_PACKAGES=$(sed -n '/^\[CORE_PACKAGES\]/,/^\[/p' "$LOCAL_CONFIG" | grep -v '^\[.*\]' | grep -vE '^\s*#|^\s*$' | xargs)
-ALL_PACKAGES="$CORE_PACKAGES $GLOBAL_PACKAGES"
+EXTRA_PACKAGES=$(sed -n '/^\[EXTRA_PACKAGES\]/,/^\[/p' "$LOCAL_CONFIG" | grep -v '^\[.*\]' | grep -vE '^\s*#|^\s*$' | xargs)
+ALL_PACKAGES="$CORE_PACKAGES $EXTRA_PACKAGES $GLOBAL_PACKAGES"
 
 APPS_TO_HIDE_STR=$(sed -n '/^\[APPS_TO_HIDE\]/,/^\[/p' "$LOCAL_CONFIG" | grep -v '^\[.*\]' | grep -vE '^\s*#|^\s*$' | xargs)
 read -r -a APPS_TO_HIDE <<< "$APPS_TO_HIDE_STR"
@@ -95,7 +96,7 @@ if [ "$DESKTOP_ENV" == "LXQT" ]; then
     fi
     cd ~ && rm -rf /tmp/lubuntu-rip
     
-    CONF_SRC="$CONTENTS_DIR/lxqt/.config"
+    CONF_SRC="$CONTENTS_DIR/lxqt/config"
     mkdir -p "$USER_HOME/.config/lxqt" "$USER_HOME/.config/pcmanfm-qt/lxqt"
     cp "$CONF_SRC/"*.conf "$USER_HOME/.config/lxqt/" 2>/dev/null
     cp "$CONF_SRC/pcmanfm-qt.conf" "$USER_HOME/.config/pcmanfm-qt/lxqt/settings.conf" 2>/dev/null
@@ -106,7 +107,7 @@ if [ "$DESKTOP_ENV" == "LXQT" ]; then
         chmod +x /usr/bin/lxqt-panel
     fi
 
-    SCRIPTS_SRC="$CONTENTS_DIR/lxqt/.scripts"
+    SCRIPTS_SRC="$CONTENTS_DIR/lxqt/scripts"
     if [ -d "$SCRIPTS_SRC" ]; then
         mkdir -p "$USER_HOME/.local/bin"
         cp -u "$SCRIPTS_SRC/"* "$USER_HOME/.local/bin/" 2>/dev/null
@@ -133,21 +134,39 @@ localectl set-locale LANG=cs_CZ.UTF-8
 
 usermod -aG audio,pulse,pulse-access,video,plugdev $REAL_USER
 
-mkdir -p /etc/polkit-1/rules.d /etc/X11/xorg.conf.d
+# Automount (Polkit)
+mkdir -p /etc/polkit-1/rules.d
 echo 'polkit.addRule(function(action, subject) { if ((action.id == "org.freedesktop.udisks2.filesystem-mount-system" || action.id == "org.freedesktop.udisks2.filesystem-mount") && subject.isInGroup("sudo")) { return polkit.Result.YES; } });' > /etc/polkit-1/rules.d/50-udisks2-automount.rules
-echo -e 'Section "InputClass"\n Identifier "touchpad"\n MatchIsTouchpad "on"\n Driver "libinput"\n Option "Tapping" "on"\n Option "NaturalScrolling" "true"\nEndSection' > /etc/X11/xorg.conf.d/40-libinput-touchpad.conf
+
+# Touchpad - Kompletní pravidla (vyřeší ClickFinger)
+mkdir -p /etc/X11/xorg.conf.d
+cat > /etc/X11/xorg.conf.d/40-libinput-touchpad.conf << 'EOF'
+Section "InputClass"
+    Identifier "libinput touchpad catchall"
+    MatchIsTouchpad "on"
+    Driver "libinput"
+    Option "ClickMethod" "clickfinger"
+    Option "Tapping" "on"
+    Option "NaturalScrolling" "true"
+    Option "AccelProfile" "adaptive"
+    Option "AccelSpeed" "0.0"
+EndSection
+EOF
 
 if [ "$DESKTOP_ENV" == "LXQT" ]; then
     mkdir -p "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
     echo '<?xml version="1.0" encoding="UTF-8"?><channel name="xfwm4" version="1.0"><property name="general" type="empty"><property name="theme" type="string" value="Default"/><property name="button_layout" type="string" value="O|HMC"/><property name="title_alignment" type="string" value="center"/><property name="tile_on_move" type="bool" value="true"/></property></channel>' > "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml"
     
     [[ "$CONFIRM_LOGOUT" == "TRUE" ]] && CONF_OUT="true" || CONF_OUT="false"
+    
+    # LXQT.conf s VYNUCOVÁNÍM ČEŠTINY
     cat <<EOF > "$USER_HOME/.config/lxqt/lxqt.conf"
 [General]
 __userfile__=true
 icon_theme=Papirus
 theme=Lubuntu Arc
 ask_before_logout=$CONF_OUT
+language=cs_CZ
 
 [Qt]
 style=Breeze
