@@ -63,7 +63,9 @@ init_setup() {
 
     echo "--------------------------------------------------"
     echo "Vyber desktopové prostředí"
-    read -p "1) KDE Plasma | 2) LXQT (Ready out of the box): " DISTRO_ANS
+    echo "1) KDE Plasma"
+    echo "2) LXQT"
+    read -p "Zadej číslo, pak ENTER: " DISTRO_ANS
     [[ "$DISTRO_ANS" == "1" ]] && DESKTOP_ENV="PLASMA" || DESKTOP_ENV="LXQT"
 
     # Definice lokálního konfiguráku hned po výběru prostředí
@@ -71,11 +73,18 @@ init_setup() {
 
     echo "--------------------------------------------------"
     echo "Vyber prohlížeč"
-    read -p "1) Chrome | 2) Chromium | 3) Brave | 4) Firefox | 5) Nic: " BROWSER_CHOICE
+    echo "1) Chrome"
+    echo "2) Chromium"
+    echo "3) Brave"
+    echo "4) Firefox"
+    echo "5) Nic"
+    read -p "Zadej číslo, pak ENTER: " BROWSER_CHOICE
 
     echo "--------------------------------------------------"
     echo "Chceš nastavit automatické přihlašování?"
-    read -p "1) ANO | 2) NE: " AUTO_ANS
+    echo "1) Ano"
+    echo "2) Ne"
+    read -p "Zadej číslo, pak ENTER: " AUTO_ANS
     [[ "$AUTO_ANS" == "1" ]] && AUTOLOGIN_REQ="TRUE" || AUTOLOGIN_REQ="FALSE"
 
     # Načtení globálních nastavení
@@ -100,10 +109,9 @@ prepare_system() {
 
     apt-get purge -y ifupdown || true
     rm -rf /etc/network/interfaces.d/* || true
-    cat > /etc/network/interfaces << 'EOF'
-auto lo
-iface lo inet loopback 
-EOF
+    
+    # Nahrazeno printf - čisté a krátké
+    printf "auto lo\niface lo inet loopback\n" > /etc/network/interfaces
 }
 
 # === 2. INSTALACE BALÍČKŮ A PROHLÍŽEČŮ ===
@@ -149,12 +157,8 @@ setup_auto_updates() {
         fi
     fi
 
-    cat > /etc/apt/apt.conf.d/20auto-upgrades << EOF
-APT::Periodic::Update-Package-Lists "1";
-APT::Periodic::Download-Upgradeable-Packages "1";
-APT::Periodic::AutocleanInterval "7";
-APT::Periodic::Unattended-Upgrade "1";
-EOF
+    # Všechny konfigy pro upgrady na jednom řádku
+    printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Download-Upgradeable-Packages "1";\nAPT::Periodic::AutocleanInterval "7";\nAPT::Periodic::Unattended-Upgrade "1";\n' > /etc/apt/apt.conf.d/20auto-upgrades
 }
 
 # === 3. KONFIGURACE DESKTOPOVÝCH PROSTŘEDÍ ===
@@ -378,30 +382,25 @@ setup_display_manager() {
     log "Nastavuji Display Manager a Autologin..."
     if [ "$DESKTOP_ENV" == "PLASMA" ]; then
         echo "/usr/bin/sddm" > /etc/X11/default-display-manager 2>/dev/null || true
-        # Násilné vnucení SDDM přes systemd
         systemctl disable lightdm 2>/dev/null || true
         systemctl enable sddm 2>/dev/null || true
         dpkg-reconfigure -f noninteractive sddm 2>/dev/null || true
         
         if [ "$AUTOLOGIN_REQ" == "TRUE" ]; then
             mkdir -p /etc/sddm.conf.d
-            cat > /etc/sddm.conf.d/autologin.conf << EOF
-[Autologin]
-User=$REAL_USER
-Session=plasma
-Relogin=true
-EOF
+            # Kompaktní zápis SDDM konfigu
+            printf "[Autologin]\nUser=%s\nSession=plasma\nRelogin=true\n" "$REAL_USER" > /etc/sddm.conf.d/autologin.conf
         fi
     else
         echo "/usr/sbin/lightdm" > /etc/X11/default-display-manager 2>/dev/null || true
-        # Násilné vnucení LightDM přes systemd
         systemctl disable sddm 2>/dev/null || true
         systemctl enable lightdm 2>/dev/null || true
         dpkg-reconfigure -f noninteractive lightdm 2>/dev/null || true
         
         if [ "$AUTOLOGIN_REQ" == "TRUE" ]; then
             mkdir -p /etc/lightdm/lightdm.conf.d
-            echo -e "[Seat:*]\nautologin-user=$REAL_USER\nautologin-user-timeout=0" > /etc/lightdm/lightdm.conf.d/autologin.conf
+            # Kompaktní zápis LightDM konfigu
+            printf "[Seat:*]\nautologin-user=%s\nautologin-user-timeout=0\n" "$REAL_USER" > /etc/lightdm/lightdm.conf.d/autologin.conf
             sed -i 's/^#greeter-setup-script=.*/greeter-setup-script=\/usr\/bin\/numlockx on/' /etc/lightdm/lightdm.conf 2>/dev/null || true
         fi
     fi
@@ -438,28 +437,32 @@ admin_security() {
     fi
 }
 
-# ==============================================================================
-# BĚH PROGRAMU (MAIN)
-# ==============================================================================
+main() {
+    # ==============================================================================
+    # BĚH PROGRAMU (MAIN)
+    # ==============================================================================
 
-init_setup
-prepare_system
-install_packages
-setup_auto_updates
+    init_setup
+    prepare_system
+    install_packages
+    setup_auto_updates
 
-if [ "$DESKTOP_ENV" == "PLASMA" ]; then
-    configure_plasma
-else
-    configure_lxqt
-fi
+    if [ "$DESKTOP_ENV" == "PLASMA" ]; then
+        configure_plasma
+    else
+        configure_lxqt
+    fi
 
-setup_display_manager
-setup_boot
-admin_security
+    setup_display_manager
+    setup_boot
+    admin_security
 
-echo "=================================================="
-echo " HOTOVO"
-echo " RESTART ZA 5 SEKUND."
-echo "=================================================="
-sleep 5
-reboot
+    echo "=================================================="
+    echo " HOTOVO"
+    echo " RESTART ZA 5 SEKUND."
+    echo "=================================================="
+    sleep 5
+    reboot
+}
+
+main
