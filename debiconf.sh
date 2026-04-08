@@ -251,13 +251,9 @@ configure_lxqt() {
     fi
 
     if [ -f "$XFWM_SRC" ]; then
-        log "Aplikuji nastavení XFWM4..."
-        local TMP_XFWM="/tmp/xfwm_setup.sh"
-        echo "#!/bin/bash" > "$TMP_XFWM"
-        cat "$XFWM_SRC" >> "$TMP_XFWM"
-        chmod +x "$TMP_XFWM"
-        run_as_user "$TMP_XFWM"
-        rm -f "$TMP_XFWM" || true
+        log "Aplikuji externí konfiguraci XFWM4..."
+        sed -i 's/\r$//' "$XFWM_SRC"
+        su - "$REAL_USER" -c "dbus-run-session bash $XFWM_SRC" || true
     fi
 
     local LXQT_CONF="$USER_HOME/.config/lxqt/lxqt.conf"
