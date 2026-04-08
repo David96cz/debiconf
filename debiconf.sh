@@ -386,6 +386,7 @@ setup_display_manager() {
 [Autologin]
 User=$REAL_USER
 Session=plasma
+Relogin=true
 EOF
         fi
     else
