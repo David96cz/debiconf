@@ -40,8 +40,8 @@ run_as_user() {
 get_setting() {
     local key="$1"
     if [ -f "$GLOBAL_CONFIG" ]; then
-        # Přidáno || true, jinak grep zabije skript, když klíč nenajde
-        grep -i "^${key}=" "$GLOBAL_CONFIG" | cut -d'=' -f2 | tr -d '[:space:]' || true
+        # Přidáno cut -d'#' -f1 pro odříznutí komentářů
+        grep -i "^${key}=" "$GLOBAL_CONFIG" | cut -d'=' -f2 | cut -d'#' -f1 | tr -d '[:space:]' || true
     fi
 }
 
@@ -107,7 +107,6 @@ init_setup() {
     done
 
     # Načtení globálních nastavení
-    # POZOR: get_setting už musíš mít opravený, aby nebral komentáře s mřížkou!
     TIMEOUT=$(get_setting "GRUB_TIMEOUT")
     TIMEOUT=${TIMEOUT:-0}
     
@@ -117,8 +116,9 @@ init_setup() {
     BOOT_LOGO=$(get_setting "BOOT_LOGO" | tr '[:lower:]' '[:upper:]')
 
     ROOT_ADMIN_RAW=$(get_setting "ROOT_ADMIN_ONLY" | tr '[:lower:]' '[:upper:]')
-    [[ "$ROOT_ADMIN_ONLY_RAW" == "TRUE" ]] && ROOT_ADMIN_ONLY="TRUE" || ROOT_ADMIN_ONLY="FALSE"
+    [[ "$ROOT_ADMIN_RAW" == "TRUE" ]] && ROOT_ADMIN_ONLY="TRUE" || ROOT_ADMIN_ONLY="FALSE"
 }
+
 prepare_system() {
     log "Základní příprava systému a sítě..."
     apt-get update -qq
@@ -456,11 +456,11 @@ admin_security() {
     fi
 }
 
-main() {
-    # ==============================================================================
-    # BĚH PROGRAMU (MAIN)
-    # ==============================================================================
+# ==============================================================================
+# BĚH PROGRAMU (MAIN)
+# ==============================================================================
 
+main() {
     init_setup
     prepare_system
     install_packages
