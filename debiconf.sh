@@ -375,7 +375,11 @@ setup_display_manager() {
     log "Nastavuji Display Manager a Autologin..."
     if [ "$DESKTOP_ENV" == "PLASMA" ]; then
         echo "/usr/bin/sddm" > /etc/X11/default-display-manager 2>/dev/null || true
+        # Násilné vnucení SDDM přes systemd
+        systemctl disable lightdm 2>/dev/null || true
+        systemctl enable sddm 2>/dev/null || true
         dpkg-reconfigure -f noninteractive sddm 2>/dev/null || true
+        
         if [ "$AUTOLOGIN_REQ" == "TRUE" ]; then
             mkdir -p /etc/sddm.conf.d
             cat > /etc/sddm.conf.d/autologin.conf << EOF
@@ -386,7 +390,11 @@ EOF
         fi
     else
         echo "/usr/sbin/lightdm" > /etc/X11/default-display-manager 2>/dev/null || true
+        # Násilné vnucení LightDM přes systemd
+        systemctl disable sddm 2>/dev/null || true
+        systemctl enable lightdm 2>/dev/null || true
         dpkg-reconfigure -f noninteractive lightdm 2>/dev/null || true
+        
         if [ "$AUTOLOGIN_REQ" == "TRUE" ]; then
             mkdir -p /etc/lightdm/lightdm.conf.d
             echo -e "[Seat:*]\nautologin-user=$REAL_USER\nautologin-user-timeout=0" > /etc/lightdm/lightdm.conf.d/autologin.conf
