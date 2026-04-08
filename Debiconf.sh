@@ -31,11 +31,16 @@ echo ">> Detekován systémový jazyk instalace: $SYS_LANG_CODE"
 
 # --- 1. INTERAKTIVNÍ DOTAZY ---
 echo "--------------------------------------------------"
+echo "Vyber desktopové prostředí"
 read -p "1) KDE Plasma | 2) LXQT (Ready out of the box): " DISTRO_ANS
 [[ "$DISTRO_ANS" == "1" ]] && DESKTOP_ENV="PLASMA" || DESKTOP_ENV="LXQT"
 
-read -p "Vyber prohlížeč (1-Chrome, 2-Chromium, 3-Brave, 4-Firefox, 5-Nic): " BROWSER_CHOICE
-read -p "Chceš nastavit automatické přihlašování? (1=ANO, 2=NE): " AUTO_ANS
+echo "--------------------------------------------------"
+echo "Vyber prohlížeč"
+read -p "1) Chrome | 2) Chromium | 3) Brave | 4) Firefox | 5) Nic): " BROWSER_CHOICE
+echo "--------------------------------------------------"
+echo "Chceš nastavit automatické přihlašování?"
+read -p "1) ANO | 2) NE: " AUTO_ANS
 [[ "$AUTO_ANS" == "1" ]] && { AUTOLOGIN_REQ="TRUE"; RELOGIN_REQ="TRUE"; } || { AUTOLOGIN_REQ="FALSE"; RELOGIN_REQ="FALSE"; }
 
 # --- 2. NAČTENÍ KONFIGURÁKŮ ---
@@ -66,6 +71,13 @@ case $BROWSER_CHOICE in
     3) curl -fsS https://dl.brave.com/install.sh | sh ;;
     4) apt install -y firefox-esr firefox-esr-l10n-cs ;;
 esac
+
+# --- INSTALACE ANYDESK ---
+echo ">> Přidávám repozitář a instaluji AnyDesk..."
+curl -fsSL https://keys.anydesk.com/repos/DEB-GPG-KEY | gpg --dearmor -o /usr/share/keyrings/anydesk.gpg 2>/dev/null
+echo "deb [signed-by=/usr/share/keyrings/anydesk.gpg] http://deb.anydesk.com/ all main" > /etc/apt/sources.list.d/anydesk-stable.list
+apt update -qq
+apt install -y anydesk
 
 # --- 4. LXQT TÉMA A KONFIGY ---
 if [ "$DESKTOP_ENV" == "LXQT" ]; then
@@ -99,6 +111,37 @@ if [ "$DESKTOP_ENV" == "LXQT" ]; then
 fi
 
 # --- 5. SYSTÉMOVÉ NASTAVENÍ A JAZYK ---
+
+# --- AUTOMATICKÉ AKTUALIZACE (unattended-upgrades) ---
+echo ">> Konfiguruji automatické aktualizace..."
+
+# 1. Povolení automatických aktualizací v systému
+echo "unattended-upgrades unattended-upgrades/enable_auto_updates boolean true" | debconf-set-selections
+dpkg-reconfigure -f noninteractive unattended-upgrades
+
+# 2. Nastavení, aby to bralo VŠECHNY repozitáře (včetně Chromu, Brave, Firefoxu)
+# Standardně Debian bere jen bezpečnostní záplaty. Tohle mu povolí brát všechno "stable".
+UPGRADES_CONF="/etc/apt/apt.conf.d/50unattended-upgrades"
+if [ -f "$UPGRADES_CONF" ]; then
+    # Odkomentuje řádek pro "origin=Debian,codename=${distro_codename}-updates"
+    # A přidá povolení pro jakýkoliv původ (vhodné pro tiché updaty prohlížečů)
+    sed -i 's/\/\/      "o=Debian,a=${distro_codename}-updates";/"o=Debian,a=${distro_codename}-updates";/' "$UPGRADES_CONF"
+    
+    # Tento trik zajistí, že se budou aktualizovat i externí repozitáře (Chrome/Brave)
+    # Přidá sekci, která akceptuje vše, co je v /etc/apt/sources.list.d/
+    if ! grep -q "Unattended-Upgrade::Package-Blacklist" "$UPGRADES_CONF"; then
+         echo 'Unattended-Upgrade::Origins-Pattern { "o=*"; };' >> "/etc/apt/apt.conf.d/20auto-upgrades"
+    fi
+fi
+
+# 3. Nastavení frekvence (jednou denně)
+cat > /etc/apt/apt.conf.d/20auto-upgrades << EOF
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Download-Upgradeable-Packages "1";
+APT::Periodic::AutocleanInterval "7";
+APT::Periodic::Unattended-Upgrade "1";
+EOF
+
 usermod -aG audio,pulse,pulse-access,video,plugdev $REAL_USER
 chmod +s $(which brightnessctl) 2>/dev/null
 rm -f "/tmp/jas_notif_id"

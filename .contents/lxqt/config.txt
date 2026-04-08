@@ -2,7 +2,7 @@
 lxqt-core lightdm xorg pcmanfm-qt qterminal arc-theme papirus-icon-theme network-manager nm-tray breeze pulseaudio pavucontrol-qt alsa-utils gvfs gvfs-backends gvfs-fuse lxqt-powermanagement upower udisks2 lxqt-policykit lxqt-config lxqt-sudo lxqt-archiver unzip zip p7zip-full blueman bluez lxappearance qttranslations5-l10n qt6-translations-l10n pcmanfm-qt-l10n qterminal-l10n libfm-qt-l10n pavucontrol-qt-l10n lxqt-powermanagement-l10n lxqt-policykit-l10n lxqt-config-l10n lxqt-sudo-l10n lxqt-archiver-l10n lxqt-panel-l10n lxqt-session-l10n lxqt-runner-l10n lxqt-globalkeys-l10n lxqt-notificationd-l10n
 
 [EXTRA_PACKAGES]
-xfwm4 xfconf gdebi icoutils viewnior ffmpegthumbnailer gthumb cabextract yad cups-client cups brightnessctl libnotify-bin
+xfwm4 xfconf gdebi icoutils viewnior ffmpegthumbnailer gthumb cabextract yad cups-client cups brightnessctl libnotify-bin flameshot gdebi copyq
 
 [APPS_TO_HIDE]
 lxqt-about.desktop

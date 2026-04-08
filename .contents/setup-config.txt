@@ -4,11 +4,8 @@ BOOT_LOGO=TRUE
 CONFIRM_LOGOUT=FALSE
 
 [INSTALL]
-# --- Globální balíčky (nainstalují se všude) ---
 htop
 vlc
 zram-tools
-flameshot
-gdebi
-copyq
 featherpad
+unattended-upgrades
