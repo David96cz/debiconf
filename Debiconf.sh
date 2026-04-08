@@ -334,7 +334,7 @@ elif [ "$DESKTOP_ENV" == "PLASMA" ]; then
     chown -R $REAL_USER:$REAL_USER "$USER_HOME/.config"
 fi
 
-# --- 7. DISPLAY MANAGER (SDDM / LIGHTDM) A GRUB ---
+# --- 7. DISPLAY MANAGER (SDDM / LIGHTDM) A GRUB / BOOT LOGO ---
 if [ "$DESKTOP_ENV" == "PLASMA" ]; then
     # --- PLASMA (SDDM) ---
     echo "/usr/bin/sddm" > /etc/X11/default-display-manager 2>/dev/null
@@ -360,7 +360,18 @@ else
     fi
 fi
 
+# --- NASTAVENÍ GRUBU A BOOT LOGA ---
 sed -i "s/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=$TIMEOUT/" /etc/default/grub
+
+if [ "$BOOT_LOGO" == "TRUE" ]; then
+    echo ">> Nastavuji grafický start systému (Plymouth)..."
+    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"/' /etc/default/grub
+    plymouth-set-default-theme -R bgrt 2>/dev/null || plymouth-set-default-theme -R spinner 2>/dev/null
+else
+    echo ">> Ponechávám textový start systému..."
+    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet"/' /etc/default/grub
+fi
+
 update-grub
 systemctl set-default graphical.target
 
