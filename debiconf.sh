@@ -63,31 +63,51 @@ init_setup() {
 
     echo "--------------------------------------------------"
     echo "Vyber desktopové prostředí"
-    echo "1) KDE Plasma"
-    echo "2) LXQT"
-    read -p "Zadej číslo, pak ENTER: " DISTRO_ANS
-    [[ "$DISTRO_ANS" == "1" ]] && DESKTOP_ENV="PLASMA" || DESKTOP_ENV="LXQT"
+    while true; do
+        echo "1) KDE Plasma"
+        echo "2) LXQT"
+        read -p "Zadej číslo (1 nebo 2), pak ENTER: " DISTRO_ANS
+        case "$DISTRO_ANS" in
+            1) DESKTOP_ENV="PLASMA"; break ;;
+            2) DESKTOP_ENV="LXQT"; break ;;
+            *) echo -e "\033[1;31mNeplatná volba! Musíš zadat 1 nebo 2.\033[0m" ;;
+        esac
+    done
 
     # Definice lokálního konfiguráku hned po výběru prostředí
     LOCAL_CONFIG="$CONTENTS_DIR/$(echo "$DESKTOP_ENV" | tr '[:upper:]' '[:lower:]')/config.txt"
 
     echo "--------------------------------------------------"
     echo "Vyber prohlížeč"
-    echo "1) Chrome"
-    echo "2) Chromium"
-    echo "3) Brave"
-    echo "4) Firefox"
-    echo "5) Nic"
-    read -p "Zadej číslo, pak ENTER: " BROWSER_CHOICE
+    while true; do
+        echo "1) Chrome"
+        echo "2) Chromium"
+        echo "3) Brave"
+        echo "4) Firefox"
+        echo "5) Nic"
+        read -p "Zadej číslo (1 až 5), pak ENTER: " BROWSER_CHOICE
+        if [[ "$BROWSER_CHOICE" =~ ^[1-5]$ ]]; then
+            break
+        else
+            echo -e "\033[1;31mZadej číslo od 1 do 5!\033[0m"
+        fi
+    done
 
     echo "--------------------------------------------------"
     echo "Chceš nastavit automatické přihlašování?"
-    echo "1) Ano"
-    echo "2) Ne"
-    read -p "Zadej číslo, pak ENTER: " AUTO_ANS
-    [[ "$AUTO_ANS" == "1" ]] && AUTOLOGIN_REQ="TRUE" || AUTOLOGIN_REQ="FALSE"
+    while true; do
+        echo "1) Ano"
+        echo "2) Ne"
+        read -p "Zadej číslo (1 nebo 2), pak ENTER: " AUTO_ANS
+        case "$AUTO_ANS" in
+            1) AUTOLOGIN_REQ="TRUE"; break ;;
+            2) AUTOLOGIN_REQ="FALSE"; break ;;
+            *) echo -e "\033[1;31mZadej 1 pro Ano nebo 2 pro Ne!\033[0m" ;;
+        esac
+    done
 
     # Načtení globálních nastavení
+    # POZOR: get_setting už musíš mít opravený, aby nebral komentáře s mřížkou!
     TIMEOUT=$(get_setting "GRUB_TIMEOUT")
     TIMEOUT=${TIMEOUT:-0}
     
@@ -97,9 +117,8 @@ init_setup() {
     BOOT_LOGO=$(get_setting "BOOT_LOGO" | tr '[:lower:]' '[:upper:]')
 
     ROOT_ADMIN_RAW=$(get_setting "ROOT_ADMIN_ONLY" | tr '[:lower:]' '[:upper:]')
-    [[ "$ROOT_ADMIN_RAW" == "TRUE" ]] && ROOT_ADMIN_ONLY="TRUE" || ROOT_ADMIN_ONLY="FALSE"
+    [[ "$ROOT_ADMIN_ONLY_RAW" == "TRUE" ]] && ROOT_ADMIN_ONLY="TRUE" || ROOT_ADMIN_ONLY="FALSE"
 }
-
 prepare_system() {
     log "Základní příprava systému a sítě..."
     apt-get update -qq
