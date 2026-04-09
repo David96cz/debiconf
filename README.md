@@ -7,8 +7,8 @@ Po dokončení čisté netinst instalace bez prostředí:
   
   apt install git -y
   
-  git clone https://github.com/David96cz/Debiconf
+  git clone https://github.com/David96cz/debiconf
   
-  cd Debiconf
+  cd debiconf
   
-  bash Debiconf.sh
+  bash debiconf.sh
