@@ -139,18 +139,46 @@ init_setup() {
         done
 
         echo "--------------------------------------------------"
-        echo "5. Omezit sudo pouze na heslo ROOT? (Běžný uživatel ztratí administrátorská práva)"
+        echo "5. Vyžadovat pro sudo výhradně jen heslo ROOT? (Místo uživatelského hesla nastavené při instalaci bude pro administraci vyžadováno heslo ROOT)"
         while true; do
-            echo "1) Ano (Max. zabezpečení)"
-            echo "2) Ne (Ponechat sudo běžnému uživateli)"
+            echo "1) Ano (Sudo bude chtít ROOT heslo)"
+            echo "2) Ne (Ponechat pro sudo klasické heslo uživatele)"
             read -p "Zadej číslo (1 nebo 2): " ROOT_ANS
             case "$ROOT_ANS" in
-                1) ROOT_ADMIN_ONLY="TRUE"; ROOT_STR="Ano (Odebrat sudo)"; break ;;
-                2) ROOT_ADMIN_ONLY="FALSE"; ROOT_STR="Ne (Ponechat sudo)"; break ;;
+                1) 
+                    ROOT_ADMIN_ONLY="TRUE"
+                    ROOT_STR="Ano (Sudo na root heslo)"
+                    break 
+                    ;;
+                2) 
+                    ROOT_ADMIN_ONLY="FALSE"
+                    ROOT_STR="Ne (Sudo na uživatele)"
+                    # Rovnou natvrdo zakážeme smazání hesla, jinak by měl sudo bez hesla
+                    REMOVE_PASS="FALSE" 
+                    REMOVE_PASS_STR="Ne (Nutné pro sudo)"
+                    break 
+                    ;;
                 r|R) continue 2 ;;
                 *) echo -e "\033[1;31mNeplatná volba! Zadej 1, 2 nebo R.\033[0m" ;;
             esac
         done
+
+        # Zeptáme se na smazání hesla JEN pokud je sudo kryté rootem
+        if [ "$ROOT_ADMIN_ONLY" == "TRUE" ]; then
+            echo "--------------------------------------------------"
+            echo "5b. Odstranit uživateli heslo pro přihlášení? (Windows styl - přihlášení jen kliknutím. Bezpečné, protože sudo už je chráněno ROOT heslem.)"
+            while true; do
+                echo "1) Ano (Vymazat heslo běžného uživatele)"
+                echo "2) Ne (Ponechat uživateli heslo)"
+                read -p "Zadej číslo (1 nebo 2): " PASS_ANS
+                case "$PASS_ANS" in
+                    1) REMOVE_PASS="TRUE"; REMOVE_PASS_STR="Ano (Bez hesla)"; break ;;
+                    2) REMOVE_PASS="FALSE"; REMOVE_PASS_STR="Ne (S heslem)"; break ;;
+                    r|R) continue 2 ;;
+                    *) echo -e "\033[1;31mNeplatná volba! Zadej 1, 2 nebo R.\033[0m" ;;
+                esac
+            done
+        fi
 
         echo "--------------------------------------------------"
         echo "6. Chceš nainstalovat Wine a Winetricks pro Windows aplikace?"
@@ -485,7 +513,6 @@ configure_lxqt() {
     done
 
     local PANEL_CONF="$USER_HOME/.config/lxqt/panel.conf"
-    # Překlad vlnovky u vlastní ikony menu na absolutní cestu
     if [ -f "$PANEL_CONF" ]; then
         sed -i "s|icon=~/.local|icon=$USER_HOME/.local|g" "$PANEL_CONF" || true
     fi
@@ -663,18 +690,49 @@ setup_display_manager() {
         
         if [ "$AUTOLOGIN_REQ" == "TRUE" ]; then
             mkdir -p /etc/sddm.conf.d
-            printf "[Autologin]\nUser=%s\nSession=plasma\nRelogin=true\n" "$REAL_USER" > /etc/sddm.conf.d/autologin.conf
+            printf "[Autologin]\nUser=%s\nSession=plasma\nRelogin=false\n" "$REAL_USER" > /etc/sddm.conf.d/autologin.conf
         fi
     else
         echo "/usr/sbin/lightdm" > /etc/X11/default-display-manager 2>/dev/null || true
         systemctl disable sddm 2>/dev/null || true
         systemctl enable lightdm 2>/dev/null || true
         dpkg-reconfigure -f noninteractive lightdm 2>/dev/null || true
+
+        log "Aplikuji automatickou konfiguraci pro LightDM..."
+    
+        # 1. Zobrazení uživatelů k nakliknutí
+        local LIGHTDM_CONF="/etc/lightdm/lightdm.conf"
+        if [ -f "$LIGHTDM_CONF" ]; then
+            # Najde zakomentovaný řádek a odkomentuje ho s hodnotou false
+            sed -i 's/^#greeter-hide-users=true/greeter-hide-users=false/' "$LIGHTDM_CONF"
+            sed -i 's/^#greeter-hide-users=false/greeter-hide-users=false/' "$LIGHTDM_CONF"
+        fi
+
+        # 2. Nastavení správné tapety a ošetření černé obrazovky
+        local GREETER_CONF="/etc/lightdm/lightdm-gtk-greeter.conf"
+        [ ! -f "$GREETER_CONF" ] && touch "$GREETER_CONF"
+        
+        # Pojistka, že tam je sekce [greeter]
+        if ! grep -q "^\[greeter\]" "$GREETER_CONF"; then
+            echo -e "[greeter]\n" >> "$GREETER_CONF"
+        fi
+
+        # Vynucení modré tapety pod sekci [greeter]
+        if grep -q "^background=" "$GREETER_CONF"; then
+            sed -i 's|^background=.*|background=/usr/share/lxqt/wallpapers/simple_blue_widescreen.png|' "$GREETER_CONF"
+        else
+            sed -i '/^\[greeter\]/a background=/usr/share/lxqt/wallpapers/simple_blue_widescreen.png' "$GREETER_CONF"
+        fi
+        
+        log "LightDM nastaven s modrou tapetou."
         
         if [ "$AUTOLOGIN_REQ" == "TRUE" ]; then
             mkdir -p /etc/lightdm/lightdm.conf.d
-            # Přidán systemd-run hack, který lightdm okamžitě restartuje po odhlášení, čímž vynutí autologin
-            printf "[Seat:*]\nautologin-user=%s\nautologin-user-timeout=0\nsession-cleanup-script=systemd-run systemctl restart lightdm\n" "$REAL_USER" > /etc/lightdm/lightdm.conf.d/autologin.conf
+            
+            # Čistý autologin po startu (bez agresivního relogin loopu)
+            printf "\nautologin-user=%s\nautologin-user-timeout=0\n" "$REAL_USER" > /etc/lightdm/lightdm.conf.d/autologin.conf
+            
+            # Zapnutí numlocku na přihlašovací obrazovce
             sed -i 's/^#greeter-setup-script=.*/greeter-setup-script=\/usr\/bin\/numlockx on/' /etc/lightdm/lightdm.conf 2>/dev/null || true
         fi
     fi
@@ -700,19 +758,26 @@ setup_boot() {
 }
 
 admin_security() {
-    # === 5. FINÁLNÍ ZABEZPEČENÍ ===
+    # === 5. FINÁLNÍ ZABEZPEČENÍ A HESLA ===
     if [ "$ROOT_ADMIN_ONLY" == "TRUE" ]; then
-        log "Zabezpečuji systém: Pokus o odebrání uživatele '$REAL_USER' ze skupiny sudo..."
+        log "Zabezpečuji systém: Nastavuji sudo na vyžadování hesla ROOT..."
         
-        # Ochranný mechanismus: Ověření, zda je účet root vůbec aktivní (nemá zamčené heslo '!*' v /etc/shadow)
+        # Ochranný mechanismus: Ověření, zda je účet root vůbec aktivní
         if grep -q '^root:[!\*]' /etc/shadow; then
             log "CHYBA: Účet root je zamčen nebo nemá nastavené heslo!"
-            log "Bezpečnostní pojistka: Ponechávám uživateli '$REAL_USER' práva sudo, jinak by se systém zcela zablokoval."
+            log "Bezpečnostní pojistka: Sudo bude dál chtít heslo uživatele, jinak by se systém zablokoval."
         else
-            deluser "$REAL_USER" sudo 2>/dev/null || true
-            rm -f "/etc/sudoers.d/$REAL_USER" 2>/dev/null || true
-            log "Uživatel '$REAL_USER' byl úspěšně degradován. Pro správu systému bude nyní vyžadováno heslo ROOT."
+            # Čisté řešení přes sudoers.d
+            echo 'Defaults rootpw' > /etc/sudoers.d/01-rootpw
+            chmod 0440 /etc/sudoers.d/01-rootpw
+            log "Sudo nyní bezpečně vyžaduje heslo ROOT."
         fi
+    fi
+
+    if [ "$REMOVE_PASS" == "TRUE" ]; then
+        log "Odstraňuji heslo uživatele '$REAL_USER' pro snadné přihlášení..."
+        passwd -d "$REAL_USER"
+        log "Heslo uživatele bylo odstraněno."
     fi
 }
 
