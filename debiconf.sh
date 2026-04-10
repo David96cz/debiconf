@@ -401,10 +401,20 @@ configure_lxqt() {
     cp "$CONF_SRC/"*.conf "$USER_HOME/.config/lxqt/" 2>/dev/null || true
     cp "$CONF_SRC/pcmanfm-qt.conf" "$USER_HOME/.config/pcmanfm-qt/lxqt/settings.conf" 2>/dev/null || true
 
-    if [ -f "$CONF_SRC/lxqt-panel_amd64_no_about" ]; then
+    if [ "$SYS_ARCH" = "amd64" ] && [ -f "$CONF_SRC/lxqt-panel_no_about_amd64" ]; then
+        log "Nalezena architektura amd64. Instaluji příslušný panel..."
         mv /usr/bin/lxqt-panel /usr/bin/lxqt-panel.bak 2>/dev/null || true
-        cp "$CONF_SRC/lxqt-panel_amd64_no_about" /usr/bin/lxqt-panel || true
+        cp "$CONF_SRC/lxqt-panel_no_about_amd64" /usr/bin/lxqt-panel || true
         chmod +x /usr/bin/lxqt-panel || true
+
+    elif [ "$SYS_ARCH" = "arm64" ] && [ -f "$CONF_SRC/lxqt-panel_no_about_arm64" ]; then
+        log "Nalezena architektura arm64. Instaluji příslušný panel..."
+        mv /usr/bin/lxqt-panel /usr/bin/lxqt-panel.bak 2>/dev/null || true
+        cp "$CONF_SRC/lxqt-panel_no_about_arm64" /usr/bin/lxqt-panel || true
+        chmod +x /usr/bin/lxqt-panel || true
+
+    else
+        log "Upravený panel pro architekturu $SYS_ARCH nebyl ve zdrojích nalezen, ponechávám výchozí."
     fi
 
     local SCRIPTS_SRC="$CONTENTS_DIR/lxqt/scripts"
@@ -729,8 +739,8 @@ setup_display_manager() {
         if [ "$AUTOLOGIN_REQ" == "TRUE" ]; then
             mkdir -p /etc/lightdm/lightdm.conf.d
             
-            # Čistý autologin po startu (bez agresivního relogin loopu)
-            printf "\nautologin-user=%s\nautologin-user-timeout=0\n" "$REAL_USER" > /etc/lightdm/lightdm.conf.d/autologin.conf
+            # TADY JE TA HLAVIČKA [Seat:*], KTEROU JSEM DVAKRÁT ZAPOMNĚL:
+            printf "[Seat:*]\nautologin-user=%s\nautologin-user-timeout=0\n" "$REAL_USER" > /etc/lightdm/lightdm.conf.d/autologin.conf
             
             # Zapnutí numlocku na přihlašovací obrazovce
             sed -i 's/^#greeter-setup-script=.*/greeter-setup-script=\/usr\/bin\/numlockx on/' /etc/lightdm/lightdm.conf 2>/dev/null || true
