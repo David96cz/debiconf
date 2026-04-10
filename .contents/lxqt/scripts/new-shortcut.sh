@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 while true; do
 
     clear
-    echo -e "${CYAN}--- GENERÁTOR ZÁSTUPCŮ (verze 9.3 - Loop Mode) ---${NC}"
+    echo -e "${CYAN}--- GENERÁTOR ZÁSTUPCŮ ---${NC}"
 
     # 1. NÁZEV
     echo ""

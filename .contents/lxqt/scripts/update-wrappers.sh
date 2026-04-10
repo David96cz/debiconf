@@ -18,6 +18,25 @@ echo "📂 Skripty jsou v: $SCRIPT_DIR"
 
 mkdir -p "$LOCAL_APPS"
 
+# --- ÚKLID MRTVOL PO ODINSTALACI ---
+echo "🧹 Kontroluji a čistím smazané aplikace..."
+for local_app in "$LOCAL_APPS"/*.desktop; do
+    [ -e "$local_app" ] || continue
+    filename=$(basename "$local_app")
+    system_app="$SYSTEM_APPS/$filename"
+
+    # Pokud systémový rodič už neexistuje
+    if [ ! -f "$system_app" ]; then
+        # Bezpečnostní pojistka: Smažeme to JEN tehdy, pokud je to náš vygenerovaný wrapper.
+        # Tvých vlastních ručně vytvořených zástupců (z new-shortcut.sh) se to nedotkne.
+        if grep -q "$SCRIPT_PATH" "$local_app"; then
+            # echo "🗑️ Mažu osiřelého zástupce po odinstalaci: $filename"
+            rm -f "$local_app"
+        fi
+    fi
+done
+# -----------------------------------
+
 # Projdeme systémové aplikace
 for app in "$SYSTEM_APPS"/*.desktop; do
     filename=$(basename "$app")

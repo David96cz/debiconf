@@ -314,19 +314,27 @@ install_packages() {
 }
 
 setup_auto_updates() {
-    log "Konfiguruji automatické aktualizace (unattended-upgrades)..."
-    echo "unattended-upgrades unattended-upgrades/enable_auto_updates boolean true" | debconf-set-selections
-    dpkg-reconfigure -f noninteractive unattended-upgrades
+    log "Konfiguruji absolutní automatické aktualizace a likviduji otravné notifikace..."
 
-    local UPGRADES_CONF="/etc/apt/apt.conf.d/50unattended-upgrades"
-    if [ -f "$UPGRADES_CONF" ]; then
-        sed -i 's/\/\/      "o=Debian,a=${distro_codename}-updates";/"o=Debian,a=${distro_codename}-updates";/' "$UPGRADES_CONF" || true
-        if ! grep -q "Unattended-Upgrade::Package-Blacklist" "$UPGRADES_CONF"; then
-            echo 'Unattended-Upgrade::Origins-Pattern { "o=*"; };' >> "/etc/apt/apt.conf.d/20auto-upgrades" || true
-        fi
-    fi
+    # 1. Odstranění Discover notifikátoru (KDE Plasma), aby neotravoval v liště
+    log "Zabíjím plasma-discover-notifier..."
+    apt-get purge -y plasma-discover-notifier 2>/dev/null || true
 
-    printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Download-Upgradeable-Packages "1";\nAPT::Periodic::AutocleanInterval "7";\nAPT::Periodic::Unattended-Upgrade "1";\n' > /etc/apt/apt.conf.d/20auto-upgrades
+    # 2. Vypnutí napůl funkčního debianího unattended-upgrades (aby neblokoval apt pro náš cron)
+    log "Deaktivuji výchozí apt timery..."
+    printf 'APT::Periodic::Update-Package-Lists "0";\nAPT::Periodic::Unattended-Upgrade "0";\n' > /etc/apt/apt.conf.d/20auto-upgrades 2>/dev/null || true
+    systemctl disable --now apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
+
+    # 3. Nasazení neprůstřelného cron.daily skriptu pro VŠECHNY repozitáře
+    log "Vytvářím cron.daily skript pro plný update systému..."
+    
+    echo '#!/bin/bash' > /etc/cron.daily/auto-update-everything
+    echo '# Aktualizuje komplet vsechno vcetne Chrome a WineHQ' >> /etc/cron.daily/auto-update-everything
+    echo '/usr/bin/apt-get update -qq' >> /etc/cron.daily/auto-update-everything
+    echo 'DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get upgrade -y -q' >> /etc/cron.daily/auto-update-everything
+    echo '/usr/bin/apt-get autoremove -y -q' >> /etc/cron.daily/auto-update-everything
+
+    chmod +x /etc/cron.daily/auto-update-everything
 }
 
 # === 3. KONFIGURACE DESKTOPOVÝCH PROSTŘEDÍ ===
@@ -371,6 +379,11 @@ configure_lxqt() {
         cp -u "$SCRIPTS_SRC/"* "$USER_HOME/.local/bin/" 2>/dev/null || true
         chmod +x "$USER_HOME/.local/bin/"* 2>/dev/null || true
     fi
+
+    # --- AUTOMATIZACE WRAPPERŮ PO KAŽDÉ INSTALACI ---
+    log "Vytvářím APT hook pro automatické spouštění update-wrappers..."
+    echo "DPkg::Post-Invoke { \"su - $REAL_USER -c '$USER_HOME/.local/bin/update-wrappers.sh'\"; };" > /etc/apt/apt.conf.d/99-update-wrappers
+    # ------------------------------------------------
 
     chmod +s $(which brightnessctl 2>/dev/null) 2>/dev/null || true
     rm -f "/tmp/jas_notif_id" || true
@@ -436,6 +449,20 @@ configure_lxqt() {
         done < "$SHORTCUTS_SRC"
     fi
 
+    # --- OPRAVA WINDOWS KLÁVESY (SUPER_L) PRO MENU ---
+    log "Přemapovávám Windows klávesu na otevření hlavního menu..."
+    if [ -f "$SHORTCUTS_CONF" ]; then
+        # Odstřelíme případný starý záznam pro Super_L (smaže hlavičku a 3 řádky pod ní)
+        sed -i '/^\[Super_L\]/,+3d' "$SHORTCUTS_CONF" 2>/dev/null || true
+        
+        # Zapíšeme to tam natvrdo znova a správně
+        echo -e "\n[Super_L]" >> "$SHORTCUTS_CONF"
+        echo "Comment=Otevrit menu" >> "$SHORTCUTS_CONF"
+        echo "Enabled=true" >> "$SHORTCUTS_CONF"
+        echo "path=/panel/fancymenu/show_hide" >> "$SHORTCUTS_CONF"
+    fi
+    # -------------------------------------------------
+
     local WRAPPER_BIN="$USER_HOME/.local/bin/busy-launch.py"
     local LOCAL_APPS="$USER_HOME/.local/share/applications"
     mkdir -p "$LOCAL_APPS"
@@ -500,9 +527,26 @@ configure_lxqt() {
                 > "$ACTION_DIR/$CURRENT_FILE"
             elif [ -n "$CURRENT_FILE" ]; then
                 echo "$line" >> "$ACTION_DIR/$CURRENT_FILE"
+                sed -i "s|~/.local/bin|$USER_HOME/.local/bin|g" "$ACTION_DIR/$CURRENT_FILE" || true
             fi
         done < "$CONTEXT_CONF"
     fi
+
+    # --- VYTVOŘENÍ ZÁSTUPCE PRO NEW-SHORTCUT.SH V MENU ---
+    log "Vytvářím zástupce pro skript new-shortcut v menu aplikací..."
+    local SHORTCUT_DESKTOP="$LOCAL_APPS/new-shortcut.desktop"
+    
+    echo "[Desktop Entry]" > "$SHORTCUT_DESKTOP"
+    echo "Type=Application" >> "$SHORTCUT_DESKTOP"
+    echo "Name=Vytvořit zástupce" >> "$SHORTCUT_DESKTOP"
+    echo "Comment=Spustí skript pro nový zástupce" >> "$SHORTCUT_DESKTOP"
+    echo "Exec=$USER_HOME/.local/bin/new-shortcut.sh" >> "$SHORTCUT_DESKTOP"
+    echo "Icon=system-run" >> "$SHORTCUT_DESKTOP"
+    echo "Terminal=false" >> "$SHORTCUT_DESKTOP"
+    echo "Categories=Utility;" >> "$SHORTCUT_DESKTOP"
+    
+    chmod +x "$SHORTCUT_DESKTOP" || true
+    # -----------------------------------------------------
 
     # --- VÝCHOZÍ APLIKACE (MIME TYPES) ---
     log "Nastavuji výchozí aplikace (FeatherPad, GDebi, Office)..."
@@ -580,6 +624,9 @@ configure_plasma() {
         fi
     fi
 
+    log "Odstraňuji Plasma Discover Notifier, aby neotravoval v liště..."
+    apt-get purge -y plasma-discover-notifier || true
+
     chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config" || true
 }
 
@@ -605,7 +652,8 @@ setup_display_manager() {
         
         if [ "$AUTOLOGIN_REQ" == "TRUE" ]; then
             mkdir -p /etc/lightdm/lightdm.conf.d
-            printf "[Seat:*]\nautologin-user=%s\nautologin-user-timeout=0\n" "$REAL_USER" > /etc/lightdm/lightdm.conf.d/autologin.conf
+            # Přidán systemd-run hack, který lightdm okamžitě restartuje po odhlášení, čímž vynutí autologin
+            printf "[Seat:*]\nautologin-user=%s\nautologin-user-timeout=0\nsession-cleanup-script=systemd-run systemctl restart lightdm\n" "$REAL_USER" > /etc/lightdm/lightdm.conf.d/autologin.conf
             sed -i 's/^#greeter-setup-script=.*/greeter-setup-script=\/usr\/bin\/numlockx on/' /etc/lightdm/lightdm.conf 2>/dev/null || true
         fi
     fi
