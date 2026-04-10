@@ -398,13 +398,16 @@ configure_lxqt() {
         grep -q "^window_manager=" "$SESSION_CONF" || sed -i '/^\[General\]/a window_manager=xfwm4' "$SESSION_CONF" || true
     fi
 
-    if [ -f "$XFWM_SRC" ]; then
+if [ -f "$XFWM_SRC" ]; then
         log "Aplikuji externí konfiguraci XFWM4..."
         sed -i 's/\r$//' "$XFWM_SRC"
         
         cp "$XFWM_SRC" /tmp/xfwm-apply.sh
         chown "$REAL_USER:$REAL_USER" /tmp/xfwm-apply.sh
-        su - "$REAL_USER" -c "mkdir -p ~/.config/xfce4/xfconf/xfce-perchannel-xml"
+        
+        # Vytvoří to root, práva se automaticky opraví na konci celého skriptu
+        mkdir -p "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
+        
         su - "$REAL_USER" -c "dbus-run-session bash /tmp/xfwm-apply.sh" || true
         rm -f /tmp/xfwm-apply.sh
     fi
