@@ -447,6 +447,11 @@ configure_lxqt() {
     done
 
     local PANEL_CONF="$USER_HOME/.config/lxqt/panel.conf"
+    # Překlad vlnovky u vlastní ikony menu na absolutní cestu
+    if [ -f "$PANEL_CONF" ]; then
+        sed -i "s|icon=~/.local|icon=$USER_HOME/.local|g" "$PANEL_CONF" || true
+    fi
+    
     case $BROWSER_CHOICE in
         1) B_NAME="google-chrome.desktop"; B_EXEC="google-chrome-stable" ;;
         2) B_NAME="chromium.desktop"; B_EXEC="chromium" ;;
@@ -487,6 +492,37 @@ configure_lxqt() {
             fi
         done < "$CONTEXT_CONF"
     fi
+
+    # --- VÝCHOZÍ APLIKACE (MIME TYPES) ---
+    log "Nastavuji výchozí aplikace (FeatherPad, GDebi, Office)..."
+    local MIME_FILE="$USER_HOME/.config/mimeapps.list"
+    
+    # Vytvoření souboru a základní sekce, pokud neexistuje
+    [ ! -f "$MIME_FILE" ] && echo "[Default Applications]" > "$MIME_FILE"
+    grep -q "^\[Default Applications\]" "$MIME_FILE" || echo "[Default Applications]" >> "$MIME_FILE"
+
+    # Pomocná lokální funkce pro bezpečný zápis/přepis
+    set_default_app() {
+        local mime="$1"
+        local app="$2"
+        # Smaže starý záznam (pokud existuje) a vloží nový hned pod hlavičku
+        sed -i "/^${mime//\//\\/}=/d" "$MIME_FILE" 2>/dev/null || true
+        sed -i "/^\[Default Applications\]/a ${mime}=${app};" "$MIME_FILE"
+    }
+
+    # TXT -> FeatherPad
+    set_default_app "text/plain" "featherpad.desktop"
+    
+    # DEB balíčky -> GDebi
+    set_default_app "application/vnd.debian.binary-package" "gdebi.desktop"
+
+    # DOCX -> Podle výběru v dotazníku
+    if [ "$OFFICE_CHOICE" == "1" ]; then
+        set_default_app "application/vnd.openxmlformats-officedocument.wordprocessingml.document" "libreoffice-writer.desktop"
+    elif [ "$OFFICE_CHOICE" == "2" ]; then
+        set_default_app "application/vnd.openxmlformats-officedocument.wordprocessingml.document" "onlyoffice-desktopeditors.desktop"
+    fi
+    # -------------------------------------
 
     chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config" "$USER_HOME/.local" || true
 }
