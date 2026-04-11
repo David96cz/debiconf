@@ -1,5 +1,5 @@
 # Debiconf
-Zprovozní desktopové prostředí bez bloatwaru na čistém Debianu
+Zprovoznění desktopového prostředí bez bloatwaru na čistém Debianu
 
 Debian 13.4.0
 
