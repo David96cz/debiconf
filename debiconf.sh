@@ -357,26 +357,38 @@ install_packages() {
             log "Stahuji RustDesk: $LATEST_URL"
             wget -qO /tmp/rustdesk.deb "$LATEST_URL"
             
-            # Instalace (využijeme ten trik s odpojením grafiky, aby na nás rovnou nevybaflo okno)
-            env -u DISPLAY -u WAYLAND_DISPLAY -u XAUTHORITY apt-get install -y /tmp/rustdesk.deb || true
+            # 1. ROUBÍK: Zakážeme spuštění démona během apt-get instalace
+            echo -e '#!/bin/sh\nexit 101' > /usr/sbin/policy-rc.d
+            chmod +x /usr/sbin/policy-rc.d
+            
+            # 2. Instalace (proběhne tiše)
+            env -u DISPLAY -u WAYLAND_DISPLAY apt-get install -y /tmp/rustdesk.deb || true
             rm -f /tmp/rustdesk.deb
             
-            log "Zabíjím skryté autostart pasti po RustDesku..."
+            # 3. SUNDÁNÍ ROUBÍKU
+            rm -f /usr/sbin/policy-rc.d
             
-            # 1. Počkáme chvíli, než to RustDesk vůbec vytvoří
-            sleep 3
+            log "Vypaluji TOML konfiguraci pro permanentní skrytí tray ikony..."
             
-            # 2. Nemilosrdně sestřelíme všechny procesy
-            killall -9 rustdesk 2>/dev/null || true
+            # 4. CHIRURGICKÝ ŘEZ: Podvrhneme RustDesku soubor, který nasimuluje zadání hesla
+            local RUSTDESK_CONF_DIR="$USER_HOME/.config/rustdesk"
+            mkdir -p "$RUSTDESK_CONF_DIR"
             
-            # 3. HLAVNÍ RÁNA JISTOTY: Smažeme to kukaččí vejce přímo z tvojí složky!
-            rm -f "$USER_HOME/.config/autostart/rustdesk.desktop" 2>/dev/null || true
-            rm -f "/root/.config/autostart/rustdesk.desktop" 2>/dev/null || true
+            # Vytvoření souboru přesně s tím parametrem, co jsme našli
+            echo -e "[options]\nstop-service = 'Y'" > "$RUSTDESK_CONF_DIR/RustDesk2.toml"
             
-            # Čistý restart služby na pozadí
-            systemctl restart rustdesk 2>/dev/null || true
+            # Extrémně důležité: Vrátit práva tobě, jinak by RustDesk crashnul na permissions
+            chown -R "$REAL_USER:$REAL_USER" "$RUSTDESK_CONF_DIR"
             
-            log "RustDesk byl úspěšně nainstalován a utajen."
+            # Pojistka: To samé hodíme i do rootovy složky
+            mkdir -p /root/.config/rustdesk
+            echo -e "[options]\nstop-service = 'Y'" > /root/.config/rustdesk/RustDesk2.toml
+            
+            # 5. Teď můžeme službu nahodit - přečte si TOML a tray prostě nevyhodí.
+            systemctl enable rustdesk 2>/dev/null || true
+            systemctl start rustdesk 2>/dev/null || true
+            
+            log "RustDesk byl úspěšně nainstalován a navždy umlčen."
         else
             log "CHYBA: Nepodařilo se získat odkaz na RustDesk. Přeskakuji."
         fi
