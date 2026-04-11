@@ -655,7 +655,7 @@ lxqt_setup_apps_and_defaults() {
         [ -f "$LOCAL_APPS/$app" ] && sed -i '/^NoDisplay=/d; $ a NoDisplay=true' "$LOCAL_APPS/$app" || true
     done
 
-    # MIME Typy
+    # --- MIME Typy ---
     local MIME_FILE="$USER_HOME/.config/mimeapps.list"
     [ ! -f "$MIME_FILE" ] && echo "[Default Applications]" > "$MIME_FILE"
     grep -q "^\[Default Applications\]" "$MIME_FILE" || echo "[Default Applications]" >> "$MIME_FILE"
@@ -667,30 +667,35 @@ lxqt_setup_apps_and_defaults() {
         sed -i "/^\[Default Applications\]/a ${mime}=${app};" "$MIME_FILE"
     }
 
-    set_default_app "text/plain" "featherpad.desktop"  
-    set_default_app "text/markdown" "featherpad.desktop"
-    set_default_app "text/csv" "featherpad.desktop"
-    set_default_app "application/json" "featherpad.desktop"
-    set_default_app "application/xml" "featherpad.desktop"
-    set_default_app "application/x-shellscript" "featherpad.desktop"
+    local APPS_CONF="$CONTENTS_DIR/lxqt/config/defaultapps.conf"
     
-    set_default_app "application/vnd.debian.binary-package" "gdebi.desktop"
-    if [ "$WINE_CHOICE" == "1" ]; then
-        set_default_app "application/x-ms-dos-executable" "wine.desktop"
-        set_default_app "application/x-msdownload" "wine.desktop"
-        set_default_app "application/x-ms-shortcut" "wine.desktop"
-    fi
-    set_default_app "video/mp4" "vlc.desktop"
-    set_default_app "video/x-matroska" "vlc.desktop"
-    set_default_app "video/x-msvideo" "vlc.desktop"
-    set_default_app "video/webm" "vlc.desktop"
-    set_default_app "video/quicktime" "vlc.desktop"
-    set_default_app "video/x-flv" "vlc.desktop"
-
-    if [ "$OFFICE_CHOICE" == "1" ]; then
-        set_default_app "application/vnd.openxmlformats-officedocument.wordprocessingml.document" "libreoffice-writer.desktop"
-    elif [ "$OFFICE_CHOICE" == "2" ]; then
-        set_default_app "application/vnd.openxmlformats-officedocument.wordprocessingml.document" "onlyoffice-desktopeditors.desktop"
+    if [ -f "$APPS_CONF" ]; then
+        log "Načítám výchozí aplikace z defaultapps.conf..."
+        local CURRENT_APP=""
+        
+        while IFS= read -r line || [ -n "$line" ]; do
+            line=$(echo "$line" | xargs) # Očištění od mezer
+            [[ -z "$line" || "$line" =~ ^# ]] && continue # Přeskočí prázdné řádky a komentáře
+            
+            if [[ "$line" =~ ^\[(.*)\]$ ]]; then
+                CURRENT_APP="${BASH_REMATCH[1]}"
+                
+                # INTELIGENCE: Přeskočíme aplikace, které uživatel v dotazníku odmítl
+                if [ "$CURRENT_APP" == "wine.desktop" ] && [ "$WINE_CHOICE" != "1" ]; then
+                    CURRENT_APP="SKIP"
+                elif [ "$CURRENT_APP" == "libreoffice-writer.desktop" ] && [ "$OFFICE_CHOICE" != "1" ]; then
+                    CURRENT_APP="SKIP"
+                elif [ "$CURRENT_APP" == "onlyoffice-desktopeditors.desktop" ] && [ "$OFFICE_CHOICE" != "2" ]; then
+                    CURRENT_APP="SKIP"
+                fi
+                
+            elif [ "$CURRENT_APP" != "SKIP" ] && [ -n "$CURRENT_APP" ]; then
+                # Pokud nejsme ve SKIP módu, zapíšeme MIME typ k aktuální aplikaci
+                set_default_app "$line" "$CURRENT_APP"
+            fi
+        done < "$APPS_CONF"
+    else
+        log "UPOZORNĚNÍ: Soubor $APPS_CONF nebyl nalezen, výchozí aplikace nebudou nastaveny."
     fi
 
     # Autostart
