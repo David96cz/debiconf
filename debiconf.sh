@@ -515,7 +515,9 @@ lxqt_setup_system_integrations() {
     fi
 
     # --- OPRAVA NM-TRAY (Lubuntu styl) ---
-    log "Přesměrovávám nm-tray na pokročilý network-manager-gnome editor..."
+    log "Přesměrovávám nm-tray na Gnome editor a blokuji duplicitní ikonu..."
+    
+    # 1. Přesměrování editoru
     local NM_TRAY_DIR="$USER_HOME/.config/nm-tray"
     mkdir -p "$NM_TRAY_DIR"
     local NM_TRAY_CONF="$NM_TRAY_DIR/nm-tray.conf"
@@ -523,10 +525,14 @@ lxqt_setup_system_integrations() {
     if [ ! -f "$NM_TRAY_CONF" ]; then
         echo -e "[general]\nconnectionsEditor=nm-connection-editor" > "$NM_TRAY_CONF"
     else
-        # Pro jistotu, kdyby tam už nějaký záznam byl (při opakovaném spuštění skriptu)
         sed -i '/^connectionsEditor=/d' "$NM_TRAY_CONF"
         sed -i '/^\[general\]/a connectionsEditor=nm-connection-editor' "$NM_TRAY_CONF" 2>/dev/null || echo -e "\n[general]\nconnectionsEditor=nm-connection-editor" >> "$NM_TRAY_CONF"
     fi
+    
+    # 2. Likvidace duplicitní ikony z autostartu
+    local AUTOSTART_DIR="$USER_HOME/.config/autostart"
+    mkdir -p "$AUTOSTART_DIR"
+    echo -e "[Desktop Entry]\nHidden=true" > "$AUTOSTART_DIR/nm-applet.desktop"
     # --------------------------------------
 }
 
