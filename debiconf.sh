@@ -534,26 +534,29 @@ lxqt_setup_system_integrations() {
     mkdir -p "$AUTOSTART_DIR"
     echo -e "[Desktop Entry]\nHidden=true" > "$AUTOSTART_DIR/nm-applet.desktop"
 
-    # --- ZÁLOHA A AUTOMATICKÁ OBNOVA .CONFIG ---
-    log "Vytvářím systémovou zálohu konfigurace a spouštěč pro automatickou obnovu..."
+    # --- ZÁLOHA A AUTOMATICKÁ OBNOVA (Blbuvzdornost výhradně pro .config) ---
+    log "Vytvářím systémovou zálohu .config a spouštěč pro automatickou obnovu..."
     
-    # 1. Zkopírování vyladěného profilu do /etc/skel (Záloha)
-    cp -ra "$USER_HOME/.config" /etc/skel/
-    cp -ra "$USER_HOME/.local" /etc/skel/
+    # 1. Čistá záloha výhradně pro .config (bezpečně mimo /etc/skel)
+    mkdir -p /opt/debiconf-backup
+    cp -r "$USER_HOME/.config" /opt/debiconf-backup/
     
-    # 2. Vytvoření záchranného skriptu, který naběhne těsně PŘED startem LXQt
-    # Tento blok se spustí pod uživatelem při každém grafickém přihlášení
+    # EXTRÉMNĚ DŮLEŽITÉ: Záloha musí být čitelná pro všechny, aby si ji uživatelův profil 
+    # mohl po přihlášení sám přečíst a zkopírovat zpět.
+    chmod -R 755 /opt/debiconf-backup/.config
+    
+    # 2. Záchranný skript (Běží při KAŽDÉM přihlášení – po startu i po odhlášení)
     local RESTORE_SCRIPT="/etc/X11/Xsession.d/90debiconf-restore"
     
-    echo '# Pokud chybí hlavní složka LXQt (uživatel smazal nebo poškodil .config)' > "$RESTORE_SCRIPT"
+    echo '# Pokud chybí hlavní složka LXQt (uživatel smazal config)' > "$RESTORE_SCRIPT"
     echo 'if [ ! -d "$HOME/.config/lxqt" ]; then' >> "$RESTORE_SCRIPT"
-    echo '    mkdir -p "$HOME/.config" "$HOME/.local"' >> "$RESTORE_SCRIPT"
-    echo '    # Potichu zkopírujeme naši zálohu zpět z /etc/skel a nepřepíšeme věci, co nesmazal' >> "$RESTORE_SCRIPT"
-    echo '    cp -r /etc/skel/.config/* "$HOME/.config/" 2>/dev/null || true' >> "$RESTORE_SCRIPT"
-    echo '    cp -r /etc/skel/.local/* "$HOME/.local/" 2>/dev/null || true' >> "$RESTORE_SCRIPT"
+    echo '    mkdir -p "$HOME/.config"' >> "$RESTORE_SCRIPT"
+    echo '    # Kopírujeme OBSAH záložní složky (díky syntaxi "/." to vezme všechno, i skryté)' >> "$RESTORE_SCRIPT"
+    echo '    cp -r /opt/debiconf-backup/.config/. "$HOME/.config/" 2>/dev/null || true' >> "$RESTORE_SCRIPT"
     echo 'fi' >> "$RESTORE_SCRIPT"
     
     chmod 644 "$RESTORE_SCRIPT"
+    # -------------------------------------------------------------
 }
 
 lxqt_setup_wm_and_panel() {
