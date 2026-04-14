@@ -20,3 +20,5 @@ Po dokončení čisté netinst instalace bez prostředí:
   cd debiconf
   
   bash debiconf.sh
+
+![ukazka](https://github.com/user-attachments/assets/64951e8f-3912-4ba0-9bc4-acdc5192d50c)
