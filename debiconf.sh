@@ -533,7 +533,27 @@ lxqt_setup_system_integrations() {
     local AUTOSTART_DIR="$USER_HOME/.config/autostart"
     mkdir -p "$AUTOSTART_DIR"
     echo -e "[Desktop Entry]\nHidden=true" > "$AUTOSTART_DIR/nm-applet.desktop"
-    # --------------------------------------
+
+    # --- ZÁLOHA A AUTOMATICKÁ OBNOVA .CONFIG ---
+    log "Vytvářím systémovou zálohu konfigurace a spouštěč pro automatickou obnovu..."
+    
+    # 1. Zkopírování vyladěného profilu do /etc/skel (Záloha)
+    cp -ra "$USER_HOME/.config" /etc/skel/
+    cp -ra "$USER_HOME/.local" /etc/skel/
+    
+    # 2. Vytvoření záchranného skriptu, který naběhne těsně PŘED startem LXQt
+    # Tento blok se spustí pod uživatelem při každém grafickém přihlášení
+    local RESTORE_SCRIPT="/etc/X11/Xsession.d/90debiconf-restore"
+    
+    echo '# Pokud chybí hlavní složka LXQt (uživatel smazal nebo poškodil .config)' > "$RESTORE_SCRIPT"
+    echo 'if [ ! -d "$HOME/.config/lxqt" ]; then' >> "$RESTORE_SCRIPT"
+    echo '    mkdir -p "$HOME/.config" "$HOME/.local"' >> "$RESTORE_SCRIPT"
+    echo '    # Potichu zkopírujeme naši zálohu zpět z /etc/skel a nepřepíšeme věci, co nesmazal' >> "$RESTORE_SCRIPT"
+    echo '    cp -r /etc/skel/.config/* "$HOME/.config/" 2>/dev/null || true' >> "$RESTORE_SCRIPT"
+    echo '    cp -r /etc/skel/.local/* "$HOME/.local/" 2>/dev/null || true' >> "$RESTORE_SCRIPT"
+    echo 'fi' >> "$RESTORE_SCRIPT"
+    
+    chmod 644 "$RESTORE_SCRIPT"
 }
 
 lxqt_setup_wm_and_panel() {
