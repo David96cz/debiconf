@@ -30,7 +30,7 @@ Po dokončení čisté netinst instalace bez prostředí:
 **LXQt** 
 - minimální HW požadavky (libovolný 64bitový procesor, 2GB RAM)
 - spotřeba RAM po startu cca *600-700MB*
-- ready out of the box pro běžného uživatele, customizace je však strohá, méně moderní vzhled
+- ready out of the box pro běžného uživatele, customizace je však strohá, méně moderní vzhled, avšak extrémně svižné i na úplném šrotu
   
 ![lxqt](https://github.com/user-attachments/assets/ba057bfa-8508-444f-af25-8de0b2706106)
 
