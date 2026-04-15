@@ -835,6 +835,12 @@ lxqt_setup_apps_and_defaults() {
         sed -i "s|home\\\\david|home\\\\$REAL_USER|g" "$ALBERT_DEST"
     fi
 
+    # Vytvoření portálů pro Alberta k obcházení Qt bugu s krátkými cestami
+    local ALBERT_DISKS="$USER_HOME/.local/share/albert_disks"
+    mkdir -p "$ALBERT_DISKS"
+    ln -sfn /media "$ALBERT_DISKS/media"
+    ln -sfn /mnt "$ALBERT_DISKS/mnt"
+
     # ZABITÍ "FIRST RUN" DIALOGU (Podstrčení stavového souboru)
     local ALBERT_STATE_DIR="$USER_HOME/.local/share/albert"
     mkdir -p "$ALBERT_STATE_DIR"
