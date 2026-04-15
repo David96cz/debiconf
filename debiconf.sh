@@ -462,7 +462,7 @@ lxqt_prepare_base_configs() {
     # QTerminal nenápadně stranou
     local Q_CONF="$USER_HOME/.config/qterminal.org/qterminal.ini"
     mkdir -p "$(dirname "$Q_CONF")"
-    [ ! -f "$Q_CONF" ] && echo -e "[General]\nshowTerminalSizeHint=false" > "$Q_CONF" || sed -i '/showTerminalSizeHint/d; /\[General\]/a showTerminalSizeHint=false' "$Q_CONF" || true
+    [ ! -f "$Q_CONF" ] && echo -e "[General]\nshowTerminalSizeHint=false\nAskOnExit=false" > "$Q_CONF" || sed -i '/showTerminalSizeHint/d; /AskOnExit/d; /\[General\]/a showTerminalSizeHint=false\nAskOnExit=false' "$Q_CONF" || true
 }
 
 lxqt_setup_system_integrations() {
