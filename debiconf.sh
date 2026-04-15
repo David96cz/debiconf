@@ -258,7 +258,7 @@ prepare_system() {
     log "Základní příprava systému a sítě..."
     apt-get update -qq
     # Přidán plymouth a plymouth-themes
-    apt-get install -y sudo curl wget dpkg-dev git dbus-x11 numlockx plymouth plymouth-themes udiskie
+    apt-get install -y sudo curl wget dpkg-dev git dbus-x11 numlockx plymouth plymouth-themes
     
     usermod -aG sudo,audio,video,plugdev "$REAL_USER" || true
 
@@ -615,12 +615,20 @@ lxqt_setup_shortcuts_and_menus() {
         mkdir -p "$(dirname "$SHORTCUTS_CONF")"
         touch "$SHORTCUTS_CONF"
         
-        sed -i '/\.99\]/,+3d' "$SHORTCUTS_CONF" 2>/dev/null || true
         while IFS='|' read -r label shortcut cmd || [[ -n "$label" ]]; do
             [[ "$label" =~ ^#.*$ || -z "$label" ]] && continue
             safe_shortcut="${shortcut//+/%2B}"
-            FINAL_CMD=$(echo "$cmd" | sed "s|brightness.sh|$USER_HOME/.local/bin/brightness.sh|g")
-            echo -e "\n[${safe_shortcut}.99]\nComment=$label\nEnabled=true\nExec=$FINAL_CMD" >> "$SHORTCUTS_CONF"
+            
+            # UNIVERZÁLNÍ NAHRAZOVÁNÍ SCRIPTŮ: 
+            # Najde cokoliv, co končí na .sh a vloží před to cestu ~/.local/bin/
+            FINAL_CMD=$(echo "$cmd" | sed -E "s|([a-zA-Z0-9_-]+\.sh)|$USER_HOME/.local/bin/\1|g")
+            
+            # BRUTÁLNÍ VRAŽDA SYSTÉMOVÉ ZKRATKY (aby LXQt nemazalo Alberta atd.)
+            sed -i "/^\[${safe_shortcut}\]/,+3d" "$SHORTCUTS_CONF" 2>/dev/null || true
+            sed -i "/^\[${safe_shortcut}\.99\]/,+3d" "$SHORTCUTS_CONF" 2>/dev/null || true
+            
+            # Zápis čisté zkratky
+            echo -e "\n[${safe_shortcut}]\nComment=$label\nEnabled=true\nExec=$FINAL_CMD" >> "$SHORTCUTS_CONF"
         done < "$SHORTCUTS_SRC"
 
         # Super_L oprava
