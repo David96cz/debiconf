@@ -28,21 +28,22 @@ class CADMenu(QWidget):
         # Stylování tlačítek (Moderní, čistý vzhled)
         button_style = """
             QPushButton {
-                background-color: transparent;
+                background-color: rgba(255, 255, 255, 15); /* Permanentní jemné pozadí */
                 color: white;
-                font-size: 24px;
-                font-weight: bold;
-                border: 2px solid transparent;
-                padding: 10px 40px;
-                min-width: 300px;
+                font-size: 22px;
+                font-weight: 500;
+                border: 1px solid rgba(255, 255, 255, 40); /* Viditelný tenký okraj */
+                border-radius: 8px; /* Jemné zakulacení rohů */
+                padding: 15px 40px;
+                min-width: 350px;
             }
             QPushButton:hover {
                 background-color: rgba(255, 255, 255, 40);
-                border: 2px solid rgba(255, 255, 255, 100);
-                border-radius: 5px;
+                border: 1px solid rgba(255, 255, 255, 150);
             }
             QPushButton:pressed {
                 background-color: rgba(255, 255, 255, 60);
+                border: 1px solid white;
             }
         """
 
@@ -83,7 +84,7 @@ class CADMenu(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         # RGB (0,0,0) je černá, 180 je úroveň neprůhlednosti (0-255)
-        painter.fillRect(self.rect(), QColor(0, 0, 0, 180))
+        painter.fillRect(self.rect(), QColor(0, 0, 0, 220))
 
     # Reakce na klávesu Escape (zavře menu)
     def keyPressEvent(self, event):

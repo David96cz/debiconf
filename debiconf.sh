@@ -622,8 +622,8 @@ lxqt_setup_shortcuts_and_menus() {
             safe_shortcut="${shortcut//+/%2B}"
             
             # UNIVERZÁLNÍ NAHRAZOVÁNÍ SCRIPTŮ: 
-            # Najde cokoliv, co končí na .sh a vloží před to cestu ~/.local/bin/
-            FINAL_CMD=$(echo "$cmd" | sed -E "s|([a-zA-Z0-9_-]+\.sh)|$USER_HOME/.local/bin/\1|g")
+            # Najde cokoliv, co končí na .sh nebo .py a vloží před to cestu ~/.local/bin/
+            FINAL_CMD=$(echo "$cmd" | sed -E "s|([a-zA-Z0-9_-]+\.(sh|py))|$USER_HOME/.local/bin/\1|g")
             
             # BRUTÁLNÍ VRAŽDA SYSTÉMOVÉ ZKRATKY (aby LXQt nemazalo Alberta atd.)
             sed -i "/^\[${safe_shortcut}\]/,+3d" "$SHORTCUTS_CONF" 2>/dev/null || true
