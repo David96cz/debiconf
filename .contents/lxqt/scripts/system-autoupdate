@@ -6,6 +6,9 @@ export DEBIAN_FRONTEND=noninteractive
 # Konfigurace - true = blokovat jádro, false = povolit
 BLOCK_KERNEL=false
 
+# Zmrazení zkompilovaného lxqt panelu
+apt-mark hold lxqt-panel > /dev/null 2>&1
+
 # Detekce balíčků jádra (podle architektury)
 ARCH=$(dpkg --print-architecture)
 if [ "$ARCH" = "amd64" ]; then
