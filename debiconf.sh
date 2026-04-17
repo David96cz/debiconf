@@ -536,13 +536,32 @@ lxqt_setup_appearance() {
     # 1. Stažení a příprava grafických podkladů (Lubuntu Artwork)
     log "Stahuji Lubuntu artwork a nasazuji ikony..."
     cd /tmp && rm -rf lubuntu-rip && mkdir -p lubuntu-rip && cd lubuntu-rip
-    local FILE_NAME=$(wget -qO- http://archive.ubuntu.com/ubuntu/pool/universe/l/lubuntu-artwork/ | grep -o 'lubuntu-artwork_[^"]*_all\.deb' | tail -n 1) || true
+    
+    # PARAMETRY: 10 vteřin timeout, max 2 pokusy, maskování za Firefox
+    local WGET_OPT="--timeout=10 --tries=2 -U Mozilla/5.0"
+    
+    # Bezpečnější regex pro nalezení jména balíčku
+    local FILE_NAME=$(wget $WGET_OPT -qO- http://archive.ubuntu.com/ubuntu/pool/universe/l/lubuntu-artwork/ | grep -o 'lubuntu-artwork_[0-9a-zA-Z.~+-]*_all\.deb' | tail -n 1) || true
+    
     if [ -n "$FILE_NAME" ]; then
-        wget "http://archive.ubuntu.com/ubuntu/pool/universe/l/lubuntu-artwork/$FILE_NAME" -O lubuntu-artwork.deb || true
-        dpkg-deb -x lubuntu-artwork.deb root_dir || true
-        mkdir -p "$USER_HOME/.local/share/lxqt/themes"
-        cp -r root_dir/usr/share/lxqt/themes/* "$USER_HOME/.local/share/lxqt/themes/" 2>/dev/null || true
+        log "Nalezen balíček: $FILE_NAME, začínám stahovat..."
+        
+        # Stáhnutí samotného balíčku (bez -q, ať vidíš, jestli to aspoň jede, nebo nech -q pro tichý chod)
+        wget $WGET_OPT -q "http://archive.ubuntu.com/ubuntu/pool/universe/l/lubuntu-artwork/$FILE_NAME" -O lubuntu-artwork.deb || true
+        
+        # Kontrola, jestli se to reálně stáhlo a soubor není prázdný
+        if [ -s lubuntu-artwork.deb ]; then
+            dpkg-deb -x lubuntu-artwork.deb root_dir || true
+            mkdir -p "$USER_HOME/.local/share/lxqt/themes"
+            cp -r root_dir/usr/share/lxqt/themes/* "$USER_HOME/.local/share/lxqt/themes/" 2>/dev/null || true
+            log "Artwork úspěšně nasazen."
+        else
+            log "CHYBA: Soubor se sice začal stahovat, ale spojení spadlo (soubor je prázdný)."
+        fi
+    else
+        log "CHYBA: Nepodařilo se najít název balíčku na serveru (možná výpadek Ubuntu archivu)."
     fi
+    
     cd ~ && rm -rf /tmp/lubuntu-rip || true
 
     local ICONS_SRC="$CONTENTS_DIR/lxqt/icons"
