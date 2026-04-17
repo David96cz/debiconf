@@ -1,126 +1,134 @@
 #!/usr/bin/env python3
 import sys
 import os
-import fcntl
 import subprocess
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QDesktopWidget
+import pexpect
+from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QFormLayout, 
+                             QLineEdit, QPushButton, QMessageBox)
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor, QPalette, QPainter
 
-class CADMenu(QWidget):
+class PasswordChanger(QWidget):
     def __init__(self):
         super().__init__()
         self.initUI()
 
     def initUI(self):
-        # Okno bez okrajů, které zůstává vždy navrchu
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        # Nastavení průhlednosti pozadí
-        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowTitle('Změna systémového hesla')
+        self.resize(420, 250)
         
-        # Roztáhnutí přes celou obrazovku
-        screen = QDesktopWidget().screenGeometry()
-        self.setGeometry(0, 0, screen.width(), screen.height())
-
-        # Hlavní layout (vycentrování tlačítek doprostřed)
         layout = QVBoxLayout()
-        layout.setAlignment(Qt.AlignCenter)
-        layout.setSpacing(20) # Mezery mezi tlačítky
+        form_layout = QFormLayout()
+        
+        # 1. Stávající heslo
+        self.old_pass = QLineEdit()
+        self.old_pass.setEchoMode(QLineEdit.Password)
+        self.old_pass.setPlaceholderText("Pokud heslo není nastaveno, nechte prázdné")
+        
+        # 2. Nové heslo
+        self.new_pass = QLineEdit()
+        self.new_pass.setEchoMode(QLineEdit.Password)
+        self.new_pass.setPlaceholderText("Nechte prázdné pro zrušení hesla")
+        
+        # 3. Potvrzení nového
+        self.new_pass_confirm = QLineEdit()
+        self.new_pass_confirm.setEchoMode(QLineEdit.Password)
 
-        # Stylování tlačítek (Moderní, čistý vzhled)
-        button_style = """
-            QPushButton {
-                background-color: rgba(255, 255, 255, 15); /* Permanentní jemné pozadí */
-                color: white;
-                font-size: 22px;
-                font-weight: 500;
-                border: 1px solid rgba(255, 255, 255, 40); /* Viditelný tenký okraj */
-                border-radius: 8px; /* Jemné zakulacení rohů */
-                padding: 15px 40px;
-                min-width: 350px;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 40);
-                border: 1px solid rgba(255, 255, 255, 150);
-            }
-            QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 60);
-                border: 1px solid white;
-            }
-        """
+        form_layout.addRow('Stávající heslo:', self.old_pass)
+        form_layout.addRow('Nové heslo:', self.new_pass)
+        form_layout.addRow('Potvrdit nové heslo:', self.new_pass_confirm)
 
-        # Tlačítko: Zamknout
-        btn_lock = QPushButton('Zamknout')
-        btn_lock.setStyleSheet(button_style)
-        btn_lock.setCursor(Qt.PointingHandCursor)
-        btn_lock.clicked.connect(self.action_lock)
+        layout.addLayout(form_layout)
 
-        # Tlačítko: Odhlásit se
-        btn_logout = QPushButton('Odhlásit se')
-        btn_logout.setStyleSheet(button_style)
-        btn_logout.setCursor(Qt.PointingHandCursor)
-        btn_logout.clicked.connect(self.action_logout)
-
-        # Tlačítko: Správce úloh
-        btn_taskmgr = QPushButton('Správce úloh')
-        btn_taskmgr.setStyleSheet(button_style)
-        btn_taskmgr.setCursor(Qt.PointingHandCursor)
-        btn_taskmgr.clicked.connect(self.action_taskmgr)
-
-        # Tlačítko: Zrušit
-        btn_cancel = QPushButton('Zrušit')
-        btn_cancel.setStyleSheet(button_style)
-        btn_cancel.setCursor(Qt.PointingHandCursor)
-        btn_cancel.clicked.connect(self.close)
-
-        # Přidání do layoutu
-        layout.addWidget(btn_lock)
-        layout.addWidget(btn_logout)
-        layout.addWidget(btn_taskmgr)
-        layout.addSpacing(40) # Větší mezera před tlačítkem Zrušit
-        layout.addWidget(btn_cancel)
-
+        self.btn_save = QPushButton('Uložit a nastavit')
+        self.btn_save.setStyleSheet("background-color: #2a7fca; color: white; padding: 10px; font-weight: bold; border-radius: 5px;")
+        self.btn_save.setCursor(Qt.PointingHandCursor)
+        self.btn_save.clicked.connect(self.handle_change)
+        
+        layout.addSpacing(10)
+        layout.addWidget(self.btn_save)
         self.setLayout(layout)
 
-    # Vykreslení toho průsvitného tmavého pozadí
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        # RGB (0,0,0) je černá, 220 je úroveň neprůhlednosti (0-255)
-        painter.fillRect(self.rect(), QColor(0, 0, 0, 220))
+    def verify_current_password(self, old_p):
+        """Tiše ověří, jestli je zadané staré heslo správné."""
+        try:
+            # Zavoláme standardní passwd v angličtině
+            child = pexpect.spawn('env LANG=C passwd')
+            
+            # Zjistíme, na co se systém zeptá (pokud uživatel nemá heslo, přeskočí to rovnou na New password)
+            idx = child.expect(['Current password:', 'New password:', pexpect.EOF], timeout=3)
+            
+            if idx == 0:
+                # Systém chce staré heslo
+                if not old_p:
+                    child.close()
+                    return False # Bylo potřeba heslo, ale uživatel zadal prázdné
+                
+                child.sendline(old_p)
+                idx2 = child.expect(['New password:', 'Authentication token manipulation error', 'incorrect password', 'Authentication failure', pexpect.EOF], timeout=3)
+                child.close()
+                
+                # Pokud po zadání starého hesla následuje dotaz na nové, staré bylo SPRÁVNĚ
+                return idx2 == 0 
+                
+            elif idx == 1:
+                # Systém rovnou chce nové heslo (uživatel momentálně ŽÁDNÉ heslo NEMÁ)
+                child.close()
+                return old_p == "" # Vrátí True, jen pokud uživatel správně nechal políčko prázdné
+                
+            else:
+                child.close()
+                return False
+                
+        except pexpect.ExceptionPexpect:
+            return False
 
-    # Reakce na klávesu Escape (zavře menu)
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
-            self.close()
+    def handle_change(self):
+        old_p = self.old_pass.text()
+        new_p = self.new_pass.text()
+        conf_p = self.new_pass_confirm.text()
+        user = os.getlogin()
 
-    # --- AKCE TLAČÍTEK ---
-    def action_lock(self):
-        subprocess.Popen(['lxqt-leave', '--lockscreen'])
-        self.close()
+        # 1. Kontrola shody nových hesel
+        if new_p != conf_p:
+            QMessageBox.warning(self, "Chyba", "Nová hesla se neshodují!")
+            return
 
-    def action_logout(self):
-        subprocess.Popen(['lxqt-leave', '--logout'])
-        self.close()
+        # 2. Ověření stávajícího hesla (Kritická bezpečnostní oprava)
+        if not self.verify_current_password(old_p):
+            QMessageBox.critical(self, "Chyba ověření", "Stávající heslo je nesprávné.")
+            return
 
-    def action_taskmgr(self):
-        subprocess.Popen(['qps'])
-        self.close()
+        # 3. Logika pro nastavení PRÁZDNÉHO hesla
+        if not new_p:
+            reply = QMessageBox.question(self, 'Varování', 
+                "Opravdu chcete ZRUŠIT heslo? Počítač bude nezabezpečený a při přihlášení či instalaci programů nebudete zadávat heslo.",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            
+            if reply == QMessageBox.Yes:
+                try:
+                    subprocess.run(['sudo', 'passwd', '-d', user], check=True)
+                    QMessageBox.information(self, "Hotovo", "Heslo bylo úspěšně odstraněno.")
+                    self.close()
+                except:
+                    QMessageBox.critical(self, "Chyba", "Nepodařilo se smazat heslo.")
+            return
 
+        # 4. Logika pro JEDNODUCHÉ heslo (obejití linuxové buzerace přes sudo)
+        try:
+            process = subprocess.Popen(['sudo', 'passwd', user], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            process.communicate(input=f"{new_p}\n{new_p}\n")
+            
+            if process.returncode == 0:
+                QMessageBox.information(self, "Úspěch", "Vaše nové heslo bylo úspěšně nastaveno.")
+                self.close()
+            else:
+                QMessageBox.warning(self, "Chyba", "Systém odmítl heslo nastavit.")
+        except Exception as e:
+            QMessageBox.critical(self, "Chyba", f"Došlo k chybě: {str(e)}")
 
 if __name__ == '__main__':
-    # 1. Zajištění, že běží jen jedna instance
-    lock_file_path = '/tmp/cad_menu.lock'
-    lock_file = open(lock_file_path, 'w')
-    
-    try:
-        # Fyzicky zamkne soubor. LOCK_NB zajistí, že skript nečeká, ale rovnou vyhodí chybu
-        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        # Pokud je soubor zamčený (menu už běží), potichu umře
-        sys.exit(0)
-
-    # 2. Spuštění samotné aplikace
     app = QApplication(sys.argv)
-    menu = CADMenu()
-    menu.show()
+    app.setStyle("Fusion")
+    window = PasswordChanger()
+    window.show()
     sys.exit(app.exec_())

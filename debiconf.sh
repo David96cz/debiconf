@@ -1139,6 +1139,9 @@ setup_boot() {
 admin_security() {
     if [ "$ROOT_ADMIN_ONLY" == "TRUE" ]; then
         log "Zabezpečuji systém: Nastavuji sudo na vyžadování hesla ROOT..."
+
+        # Povolí uživateli měnit heslo bez zadávání starého hesla v SUDO
+        echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/passwd *" | sudo tee /etc/sudoers.d/99-passwd-nopass
         
         if grep -q '^root:[!\*]' /etc/shadow; then
             log "CHYBA: Účet root je zamčen nebo nemá nastavené heslo!"
