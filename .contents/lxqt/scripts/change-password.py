@@ -35,12 +35,12 @@ class PasswordChanger(QWidget):
         form_layout.addRow('Nové heslo:', self.new_pass)
         form_layout.addRow('Potvrdit nové heslo:', self.new_pass_confirm)
 
+        layout.addLayout(form_layout)
+
         # CHECKBOX: Zobrazit nová hesla
         self.cb_show_pass = QCheckBox('Zobrazit nová hesla')
         self.cb_show_pass.stateChanged.connect(self.toggle_echo_mode)
         layout.addWidget(self.cb_show_pass)
-
-        layout.addLayout(form_layout)
 
         self.btn_save = QPushButton('Uložit a nastavit')
         self.btn_save.setStyleSheet("background-color: #2a7fca; color: white; padding: 10px; font-weight: bold; border-radius: 5px;")
