@@ -495,6 +495,13 @@ lxqt_prepare_base_configs() {
     local Q_CONF="$USER_HOME/.config/qterminal.org/qterminal.ini"
     mkdir -p "$(dirname "$Q_CONF")"
     [ ! -f "$Q_CONF" ] && echo -e "[General]\nshowTerminalSizeHint=false\nAskOnExit=false" > "$Q_CONF" || sed -i '/showTerminalSizeHint/d; /AskOnExit/d; /\[General\]/a showTerminalSizeHint=false\nAskOnExit=false' "$Q_CONF" || true
+
+    # QPS konfigurace
+    local QPS_DST_DIR="$USER_HOME/.config/qps"
+    mkdir -p "$QPS_DST_DIR"
+    if [ -f "$CONF_SRC/qps.conf" ]; then
+        cp "$CONF_SRC/qps.conf" "$QPS_DST_DIR/qps.conf"
+    fi
 }
 
 lxqt_setup_system_integrations() {
