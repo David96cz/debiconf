@@ -286,23 +286,55 @@ install_packages() {
     log "Instaluji prohlížeč..."
     case $BROWSER_CHOICE in
         1) 
-            if [ "$SYS_ARCH" == "arm64" ]; then
+            if command -v google-chrome &> /dev/null; then
+                log "Google Chrome je již nainstalován, přeskakuji..."
+            elif [ "$SYS_ARCH" == "arm64" ]; then
                 log "UPOZORNĚNÍ: Google Chrome nevydává balíčky pro ARM. Instaluji jako náhradu Chromium."
-                apt-get install -y chromium chromium-l10n || true
+                if command -v chromium &> /dev/null; then
+                    log "Chromium je již nainstalováno, přeskakuji..."
+                else
+                    apt-get install -y chromium chromium-l10n || true
+                fi
             else
                 wget -qO /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt-get install -y /tmp/chrome.deb || true 
             fi
             ;;
-        2) apt-get install -y chromium chromium-l10n || true ;;
-        3) curl -fsS https://dl.brave.com/install.sh | sh || true ;;
-        4) apt-get install -y firefox-esr firefox-esr-l10n-cs || true ;;
+        2) 
+            if command -v chromium &> /dev/null; then
+                log "Chromium je již nainstalováno, přeskakuji..."
+            else
+                apt-get install -y chromium chromium-l10n || true 
+            fi
+            ;;
+        3) 
+            if command -v brave-browser &> /dev/null; then
+                log "Brave Browser je již nainstalován, přeskakuji..."
+            else
+                curl -fsS https://dl.brave.com/install.sh | sh || true 
+            fi
+            ;;
+        4) 
+            if command -v firefox &> /dev/null; then
+                log "Firefox je již nainstalován, přeskakuji..."
+            else
+                apt-get install -y firefox-esr firefox-esr-l10n-cs || true 
+            fi
+            ;;
     esac
 
     log "Instaluji kancelářský balík..."
     case $OFFICE_CHOICE in
-        1) apt-get install -y libreoffice libreoffice-l10n-cs || true ;;
+        1) 
+            if command -v libreoffice &> /dev/null; then
+                log "LibreOffice je již nainstalován, přeskakuji..."
+            else
+                apt-get install -y libreoffice libreoffice-l10n-cs || true 
+            fi
+            ;;
         2) 
-            if [ "$SYS_ARCH" == "arm64" ]; then
+            if command -v desktopeditors &> /dev/null; then
+                log "OnlyOffice je již nainstalován, přeskakuji..."
+            elif [ "$SYS_ARCH" == "arm64" ]; then
                 wget -qO /tmp/onlyoffice.deb https://download.onlyoffice.com/install/desktop/editors/linux/onlyoffice-desktopeditors_arm64.deb && apt-get install -y /tmp/onlyoffice.deb || true
             else
                 wget -qO /tmp/onlyoffice.deb https://download.onlyoffice.com/install/desktop/editors/linux/onlyoffice-desktopeditors_amd64.deb && apt-get install -y /tmp/onlyoffice.deb || true
@@ -537,29 +569,26 @@ lxqt_setup_appearance() {
     log "Stahuji Lubuntu artwork a nasazuji ikony..."
     cd /tmp && rm -rf lubuntu-rip && mkdir -p lubuntu-rip && cd lubuntu-rip
     
-    # PARAMETRY: 10 vteřin timeout, max 2 pokusy, maskování za Firefox
-    local WGET_OPT="--timeout=10 --tries=2 -U Mozilla/5.0"
-    
-    # Bezpečnější regex pro nalezení jména balíčku
-    local FILE_NAME=$(wget $WGET_OPT -qO- http://archive.ubuntu.com/ubuntu/pool/universe/l/lubuntu-artwork/ | grep -o 'lubuntu-artwork_[0-9a-zA-Z.~+-]*_all\.deb' | tail -n 1) || true
+    # 1. SKREPOVÁNÍ PŘES cURL A CZ MIRROR: 
+    # --max-time 5 garantuje, že i kdyby server hořel, skript se po 5 vteřinách pohne dál.
+    local FILE_NAME=$(curl -s --max-time 5 "http://cz.archive.ubuntu.com/ubuntu/pool/universe/l/lubuntu-artwork/" | grep -o 'lubuntu-artwork_[^"]*_all\.deb' | tail -n 1) || true
     
     if [ -n "$FILE_NAME" ]; then
-        log "Nalezen balíček: $FILE_NAME, začínám stahovat..."
+        log "Nalezen balíček: $FILE_NAME, stahuji z CZ mirroru..."
         
-        # Stáhnutí samotného balíčku (bez -q, ať vidíš, jestli to aspoň jede, nebo nech -q pro tichý chod)
-        wget $WGET_OPT -q "http://archive.ubuntu.com/ubuntu/pool/universe/l/lubuntu-artwork/$FILE_NAME" -O lubuntu-artwork.deb || true
+        # 2. RYCHLÉ STAŽENÍ BALÍČKU
+        wget -q --timeout=15 --tries=2 "http://cz.archive.ubuntu.com/ubuntu/pool/universe/l/lubuntu-artwork/$FILE_NAME" -O lubuntu-artwork.deb || true
         
-        # Kontrola, jestli se to reálně stáhlo a soubor není prázdný
         if [ -s lubuntu-artwork.deb ]; then
             dpkg-deb -x lubuntu-artwork.deb root_dir || true
             mkdir -p "$USER_HOME/.local/share/lxqt/themes"
             cp -r root_dir/usr/share/lxqt/themes/* "$USER_HOME/.local/share/lxqt/themes/" 2>/dev/null || true
-            log "Artwork úspěšně nasazen."
+            log "Lubuntu Artwork úspěšně nasazen."
         else
-            log "CHYBA: Soubor se sice začal stahovat, ale spojení spadlo (soubor je prázdný)."
+            log "CHYBA: Stažení balíčku selhalo (soubor je prázdný)."
         fi
     else
-        log "CHYBA: Nepodařilo se najít název balíčku na serveru (možná výpadek Ubuntu archivu)."
+        log "CHYBA: CZ Server neodpověděl do 5 vteřin, nepodařilo se zjistit název."
     fi
     
     cd ~ && rm -rf /tmp/lubuntu-rip || true
@@ -616,11 +645,18 @@ lxqt_setup_appearance() {
 
         [ -f "$SESSION_CONF" ] && [ -n "$B_EXEC" ] && sed -i "s/^BROWSER=.*/BROWSER=$B_EXEC/" "$SESSION_CONF" || true
 
+        # Definice názvu zástupce pro vyhledávání (uprav podle reality)
+        local SEARCH_DESKTOP="$LOCAL_APPS/hledat.desktop"
+
+        # Vymazání starých zástupců
         sed -i '/^apps\\/d' "$PANEL_CONF" || true
+        
         if [ -n "$B_NAME" ]; then
-            sed -i "/^\[quicklaunch\]/a apps\\\\1\\\\desktop=$LOCAL_APPS/pcmanfm-qt.desktop\napps\\\\2\\\\desktop=$LOCAL_APPS/$B_NAME\napps\\\\size=2" "$PANEL_CONF" || true
+            # Pokud je prohlížeč: 1. Hledání, 2. PCManFM, 3. Prohlížeč (size=3)
+            sed -i "/^\[quicklaunch\]/a apps\\\\1\\\\desktop=$SEARCH_DESKTOP\napps\\\\2\\\\desktop=$LOCAL_APPS/pcmanfm-qt.desktop\napps\\\\3\\\\desktop=$LOCAL_APPS/$B_NAME\napps\\\\size=3" "$PANEL_CONF" || true
         else
-            sed -i "/^\[quicklaunch\]/a apps\\\\1\\\\desktop=$LOCAL_APPS/pcmanfm-qt.desktop\napps\\\\size=1" "$PANEL_CONF" || true
+            # Pokud není prohlížeč: 1. Hledání, 2. PCManFM (size=2)
+            sed -i "/^\[quicklaunch\]/a apps\\\\1\\\\desktop=$SEARCH_DESKTOP\napps\\\\2\\\\desktop=$LOCAL_APPS/pcmanfm-qt.desktop\napps\\\\size=2" "$PANEL_CONF" || true
         fi
     fi
 }
@@ -821,10 +857,18 @@ lxqt_setup_apps_and_defaults() {
     if [ -n "$AUTORUN_APPS" ]; then
         for APP in $AUTORUN_APPS; do
             local DEST_DESKTOP="$AUTOSTART_DIR/${APP}-autostart.desktop"
+            local EXEC_CMD="$APP"
+            
+            # CHYTRÁ DETEKCE CESTY: 
+            # Pokud název aplikace končí na .sh nebo .py, vynuť absolutní cestu k .local/bin
+            if [[ "$APP" == *.sh || "$APP" == *.py ]]; then
+                EXEC_CMD="$USER_HOME/.local/bin/$APP"
+            fi
+            
             echo "[Desktop Entry]" > "$DEST_DESKTOP"
             echo "Type=Application" >> "$DEST_DESKTOP"
             echo "Name=Autostart $APP" >> "$DEST_DESKTOP"
-            echo "Exec=$APP" >> "$DEST_DESKTOP"
+            echo "Exec=$EXEC_CMD" >> "$DEST_DESKTOP"
             echo "Hidden=false" >> "$DEST_DESKTOP"
             echo "NoDisplay=false" >> "$DEST_DESKTOP"
             echo "X-GNOME-Autostart-enabled=true" >> "$DEST_DESKTOP"
