@@ -458,18 +458,6 @@ setup_auto_updates() {
     fi
 }
 
-setup_drives_automount() {
-    # Globální Automount daemon (udiskie)
-    local UDISKIE_DESKTOP="$USER_HOME/.config/autostart/udiskie.desktop"
-    mkdir -p "$(dirname "$UDISKIE_DESKTOP")"
-    echo "[Desktop Entry]" > "$UDISKIE_DESKTOP"
-    echo "Type=Application" >> "$UDISKIE_DESKTOP"
-    echo "Name=Udiskie Automount" >> "$UDISKIE_DESKTOP"
-    # Parametr -a (automount), -N (bez otravných notifikací), -t (bez tray ikony)
-    echo "Exec=udiskie -a -N -T" >> "$UDISKIE_DESKTOP"
-    echo "Hidden=false" >> "$UDISKIE_DESKTOP"
-}
-
 # === 3. KONFIGURACE DESKTOPOVÝCH PROSTŘEDÍ ===
 
 # ==============================================================================
@@ -559,7 +547,20 @@ lxqt_setup_system_integrations() {
     mkdir -p "$AUTOSTART_DIR"
     echo -e "[Desktop Entry]\nHidden=true" > "$AUTOSTART_DIR/nm-applet.desktop"
 
-   
+    # === ČISTÉ AUTOMOUNTOVÁNÍ VŠECH DISKŮ PŘES NATIVNÍ PCMANFM-QT ===
+    local PCMANFM_CONF="$USER_HOME/.config/pcmanfm-qt/lxqt/settings.conf"
+    mkdir -p "$(dirname "$PCMANFM_CONF")"
+
+    # Zkontroluje, jestli už tam sekce Volume je. Pokud ano, přepíše ty dvě důležité hodnoty. Pokud ne, přidá ji na konec.
+    if grep -q "\[Volume\]" "$PCMANFM_CONF" 2>/dev/null; then
+        sed -i 's/^AutoRun=.*/AutoRun=false/' "$PCMANFM_CONF"
+        sed -i 's/^MountOnStartup=.*/MountOnStartup=true/' "$PCMANFM_CONF"
+        sed -i 's/^MountRemovable=.*/MountRemovable=true/' "$PCMANFM_CONF"
+    else
+        echo -e "\n[Volume]\nAutoRun=false\nMountOnStartup=true\nMountRemovable=true" >> "$PCMANFM_CONF"
+    fi
+
+    chown "$REAL_USER:$REAL_USER" "$PCMANFM_CONF"
 }
 
 lxqt_setup_appearance() {
@@ -761,7 +762,7 @@ lxqt_packages_install() {
         
     log "5/7 Instaluji balíčky a externí aplikace (Albert & PeaZip čistě pro amd64)..."
 
-    # Kontrola architektury - pokud to není amd64, pošleme to do prdele
+    # Kontrola architektury
     local SYS_ARCH=$(dpkg --print-architecture)
     if [ "$SYS_ARCH" != "amd64" ]; then
         log "UPOZORNĚNÍ: Architektura $SYS_ARCH. Tento skript instaluje externí aplikace pouze pro amd64. Přeskakuji."
@@ -1141,7 +1142,8 @@ admin_security() {
         log "Zabezpečuji systém: Nastavuji sudo na vyžadování hesla ROOT..."
 
         # Povolí uživateli měnit heslo bez zadávání starého hesla v SUDO
-        echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/passwd *" | sudo tee /etc/sudoers.d/99-passwd-nopass
+        echo "$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/chpasswd, /usr/bin/passwd *" | sudo tee /etc/sudoers.d/99-passwd-nopass
+        sudo chmod 0440 /etc/sudoers.d/99-passwd-nopass
         
         if grep -q '^root:[!\*]' /etc/shadow; then
             log "CHYBA: Účet root je zamčen nebo nemá nastavené heslo!"

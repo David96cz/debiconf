@@ -61,17 +61,17 @@ class CADMenu(QWidget):
         btn_logout.setCursor(Qt.PointingHandCursor)
         btn_logout.clicked.connect(self.action_logout)
 
-        # Tlačítko: Správce úloh
-        btn_taskmgr = QPushButton('Správce úloh')
-        btn_taskmgr.setStyleSheet(button_style)
-        btn_taskmgr.setCursor(Qt.PointingHandCursor)
-        btn_taskmgr.clicked.connect(self.action_taskmgr)
-
         # Tlačítko: Změnit heslo (Nová volba)
         btn_passwd = QPushButton('Změnit heslo')
         btn_passwd.setStyleSheet(button_style)
         btn_passwd.setCursor(Qt.PointingHandCursor)
         btn_passwd.clicked.connect(self.action_passwd)
+
+        # Tlačítko: Správce úloh
+        btn_taskmgr = QPushButton('Správce úloh')
+        btn_taskmgr.setStyleSheet(button_style)
+        btn_taskmgr.setCursor(Qt.PointingHandCursor)
+        btn_taskmgr.clicked.connect(self.action_taskmgr)
 
         # Tlačítko: Zrušit
         btn_cancel = QPushButton('Zrušit')
@@ -82,8 +82,8 @@ class CADMenu(QWidget):
         # Přidání do layoutu
         layout.addWidget(btn_lock)
         layout.addWidget(btn_logout)
-        layout.addWidget(btn_taskmgr)
         layout.addWidget(btn_passwd) # Vloženo pod správce úloh
+        layout.addWidget(btn_taskmgr)
         layout.addSpacing(30) # Zmenšená mezera před Zrušit z 40 na 30
         layout.addWidget(btn_cancel)
 

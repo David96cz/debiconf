@@ -4,7 +4,7 @@ import os
 import subprocess
 import pexpect
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QFormLayout, 
-                             QLineEdit, QPushButton, QMessageBox)
+                             QLineEdit, QPushButton, QMessageBox, QCheckBox)
 from PyQt5.QtCore import Qt
 
 class PasswordChanger(QWidget):
@@ -14,7 +14,7 @@ class PasswordChanger(QWidget):
 
     def initUI(self):
         self.setWindowTitle('Změna systémového hesla')
-        self.resize(420, 250)
+        self.resize(420, 270)
         
         layout = QVBoxLayout()
         form_layout = QFormLayout()
@@ -36,6 +36,11 @@ class PasswordChanger(QWidget):
 
         layout.addLayout(form_layout)
 
+        # CHECKBOX: Zobrazit nová hesla
+        self.cb_show_pass = QCheckBox('Zobrazit nová hesla')
+        self.cb_show_pass.stateChanged.connect(self.toggle_echo_mode)
+        layout.addWidget(self.cb_show_pass)
+
         self.btn_save = QPushButton('Uložit a nastavit')
         self.btn_save.setStyleSheet("background-color: #2a7fca; color: white; padding: 10px; font-weight: bold; border-radius: 5px;")
         self.btn_save.setCursor(Qt.PointingHandCursor)
@@ -44,6 +49,14 @@ class PasswordChanger(QWidget):
         layout.addSpacing(10)
         layout.addWidget(self.btn_save)
         self.setLayout(layout)
+
+    def toggle_echo_mode(self, state):
+        if state == Qt.Checked:
+            self.new_pass.setEchoMode(QLineEdit.Normal)
+            self.new_pass_confirm.setEchoMode(QLineEdit.Normal)
+        else:
+            self.new_pass.setEchoMode(QLineEdit.Password)
+            self.new_pass_confirm.setEchoMode(QLineEdit.Password)
 
     def verify_current_password(self, old_p):
         try:
@@ -95,7 +108,6 @@ class PasswordChanger(QWidget):
                     QMessageBox.critical(self, "Chyba", "Nepodařilo se smazat heslo.")
             return
         try:
-            # Použijeme absolutní cestu /usr/sbin/chpasswd
             process = subprocess.Popen(['sudo', '/usr/sbin/chpasswd'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             out, err = process.communicate(input=f"{user}:{new_p}\n")
             
@@ -103,7 +115,6 @@ class PasswordChanger(QWidget):
                 QMessageBox.information(self, "Úspěch", "Vaše nové heslo bylo úspěšně nastaveno.")
                 self.close()
             else:
-                # Tady je ta záchrana! Vypíše to skutečný důvod, proč to Linux zařízl.
                 QMessageBox.warning(self, "Chyba Systému", f"Systém odmítl heslo nastavit.\n\nTechnický důvod:\n{err}")
         except Exception as e:
             QMessageBox.critical(self, "Chyba", f"Došlo ke kritické chybě: {str(e)}")
