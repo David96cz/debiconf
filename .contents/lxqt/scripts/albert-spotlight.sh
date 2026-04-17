@@ -1,20 +1,26 @@
 #!/bin/bash
-# ULTIMÁTNÍ SPOTLIGHT DÉMON PRO ALBERTA (S POJISTKOU)
+# ULTIMÁTNÍ SPOTLIGHT DÉMON PRO ALBERTA (MENGELE-PROOF VERZE)
 MEDIA_DIR="/media/$USER"
 MNT_DIR="/mnt"
 mkdir -p "$MEDIA_DIR" "$MNT_DIR"
 
-while true; do
-    # Inotify dál hlídá celý disk, ale NEPRŮSTŘELNĚ ignoruje všechny skryté složky a soubory
-    inotifywait -r -e create -e moved_to --exclude '.*/\..*' "$HOME" "$MEDIA_DIR" "$MNT_DIR" 2>/dev/null
+# Přidán parametr -m (monitor). Inotify běží trvale na pozadí a posílá čisté cesty (--format '%w%f')
+inotifywait -m -r -e create -e moved_to --format '%w%f' "$HOME" "$MEDIA_DIR" "$MNT_DIR" 2>/dev/null |
+while read -r FILE; do
     
-    sleep 1
+    # 1. BASHOVÁ ZEĎ (Absolutní filtr)
+    # Pokud cesta obsahuje "/." (skrytá složka nebo soubor, např. /.config/ nebo /.local/), přeskoč to!
+    if [[ "$FILE" == */.* ]]; then
+        continue
+    fi
     
-    # KONTROLA: Běží Albert?
-    # Příkaz pgrep -x hledá běžící proces s přesným názvem "albert". 
-    # Pokud běží, provede se kill a restart. Pokud neběží, nestane se absolutně nic.
+    # 2. Reakce pouze na čisté, viditelné soubory
     if pgrep -x "albert" > /dev/null; then
         killall -9 albert 2>/dev/null
         albert &
+        
+        # Debounce: Uspíme tuhle smyčku na 1,5 vteřiny, aby se Albert nerestartoval 100x
+        # když uživatel kopíruje do složky třeba 50 písniček najednou.
+        sleep 1.5
     fi
 done
