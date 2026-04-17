@@ -14,7 +14,8 @@ class PasswordChanger(QWidget):
 
     def initUI(self):
         self.setWindowTitle('Změna systémového hesla')
-        self.resize(420, 270)
+        self.setFixedSize(420, 270)
+        self.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
         
         layout = QVBoxLayout()
         form_layout = QFormLayout()
