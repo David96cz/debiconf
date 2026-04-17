@@ -376,58 +376,19 @@ install_packages() {
     fi
     # ---------------------------------------------------------
 
-    if [ "$RUSTDESK_REQ" == "TRUE" ]; then
-        log "Instalace RustDesku zahájena. Detekuji verzi pro $SYS_ARCH..."
+if [ "$RUSTDESK_REQ" == "TRUE" ]; then
+        log "Instalace RustDesku zahájena (čistá Flatpak metoda)..."
         
-        # Výběr správné architektury (x86_64 vs aarch64)
-        if [ "$SYS_ARCH" == "arm64" ]; then
-            RUSTDESK_GREP="browser_download_url.*aarch64\.deb"
-        else
-            RUSTDESK_GREP="browser_download_url.*x86_64\.deb"
-        fi
-
-        # Získání URL z GitHubu
-        LATEST_URL=$(curl -sL https://api.github.com/repos/rustdesk/rustdesk/releases/latest | grep -E "$RUSTDESK_GREP" | cut -d '"' -f 4 | head -n 1)
+        # 1. Pojistka, že je v systému nainstalovaný samotný Flatpak
+        apt-get install -y flatpak
         
-        if [ -n "$LATEST_URL" ]; then
-            log "Stahuji RustDesk: $LATEST_URL"
-            wget -qO /tmp/rustdesk.deb "$LATEST_URL"
-            
-            # 1. ROUBÍK: Zakážeme spuštění démona během apt-get instalace
-            echo -e '#!/bin/sh\nexit 101' > /usr/sbin/policy-rc.d
-            chmod +x /usr/sbin/policy-rc.d
-            
-            # 2. Instalace (proběhne tiše)
-            env -u DISPLAY -u WAYLAND_DISPLAY apt-get install -y /tmp/rustdesk.deb || true
-            rm -f /tmp/rustdesk.deb
-            
-            # 3. SUNDÁNÍ ROUBÍKU
-            rm -f /usr/sbin/policy-rc.d
-            
-            log "Vypaluji TOML konfiguraci pro permanentní skrytí tray ikony..."
-            
-            # 4. CHIRURGICKÝ ŘEZ: Podvrhneme RustDesku soubor, který nasimuluje zadání hesla
-            local RUSTDESK_CONF_DIR="$USER_HOME/.config/rustdesk"
-            mkdir -p "$RUSTDESK_CONF_DIR"
-            
-            # Vytvoření souboru přesně s tím parametrem, co jsme našli
-            echo -e "[options]\nstop-service = 'Y'" > "$RUSTDESK_CONF_DIR/RustDesk2.toml"
-            
-            # Extrémně důležité: Vrátit práva tobě, jinak by RustDesk crashnul na permissions
-            chown -R "$REAL_USER:$REAL_USER" "$RUSTDESK_CONF_DIR"
-            
-            # Pojistka: To samé hodíme i do rootovy složky
-            mkdir -p /root/.config/rustdesk
-            echo -e "[options]\nstop-service = 'Y'" > /root/.config/rustdesk/RustDesk2.toml
-            
-            # 5. Teď můžeme službu nahodit - přečte si TOML a tray prostě nevyhodí.
-            systemctl enable rustdesk 2>/dev/null || true
-            systemctl start rustdesk 2>/dev/null || true
-            
-            log "RustDesk byl úspěšně nainstalován a navždy umlčen."
-        else
-            log "CHYBA: Nepodařilo se získat odkaz na RustDesk. Přeskakuji."
-        fi
+        # 2. Přidání oficiálního Flathub repozitáře (pokud už je, nic se nestane)
+        flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+        
+        # 3. Samotná instalace RustDesku (automaticky vyřeší správnou architekturu)
+        flatpak install flathub com.rustdesk.RustDesk -y
+        
+        log "RustDesk byl úspěšně nainstalován. Žádný démon, žádné vynucování root hesel, čistý systém."
     fi
 }
 
