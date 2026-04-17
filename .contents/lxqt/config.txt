@@ -21,6 +21,7 @@ lxqt-logout.desktop
 nm-tray.desktop
 yad-icon-browser.desktop
 
-[AUTOSTART]
+[AUTORUN]
 albert
 copyq-safe.sh
+albert-spotlight.sh

@@ -900,13 +900,6 @@ lxqt_setup_apps_and_defaults() {
         done
     fi
 
-    # Spotlight Démon
-    echo "fs.inotify.max_user_watches=524288" | sudo tee /etc/sysctl.d/90-albert-inotify.conf
-    sudo sysctl -p /etc/sysctl.d/90-albert-inotify.conf
-    local SPOTLIGHT_DESKTOP="$USER_HOME/.config/autostart/albert-spotlight.desktop"
-    mkdir -p "$(dirname "$SPOTLIGHT_DESKTOP")"
-    echo -e "[Desktop Entry]\nType=Application\nName=Albert Spotlight Daemon\nExec=$USER_HOME/.local/bin/albert-spotlight.sh\nHidden=false" > "$SPOTLIGHT_DESKTOP"
-
     # --- KONFIGURACE ALBERT A PEAZIP (Dynamické cesty) ---
     log "Nasazuji konfigurace pro Albert a PeaZip..."
     
