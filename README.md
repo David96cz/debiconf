@@ -36,6 +36,14 @@ Po dokončení čisté netinst instalace bez prostředí:
 - minimální HW požadavky (libovolný 64bitový procesor, 2GB RAM)
 - spotřeba RAM po startu cca *600-700MB*
 - ready out of the box pro běžného uživatele, customizace je však strohá, méně moderní vzhled, avšak extrémně svižné i na úplném šrotu
+- *Klávesové zkratky*
+  - Win + V = zobrazení historie schránky
+  - Win + D = zobrazení plochy
+  - Win + Mezerník = hledání nastavení, aplikací, souborů na interním či externím disku
+  - Win + Shift + S = pořízení screenshotu
+  - Ctrl + Shift + ESC = správce úloh
+  - Ctrl + Alt + Delete = kontextová nabídka pro uzamčení, odhlášení, správce úloh, apod.
+  - Alt + Tab = přepínání mezi okny apikací
   
 ![lxqt](https://github.com/user-attachments/assets/ba057bfa-8508-444f-af25-8de0b2706106)
 
