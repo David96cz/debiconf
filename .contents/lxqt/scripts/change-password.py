@@ -95,16 +95,18 @@ class PasswordChanger(QWidget):
                     QMessageBox.critical(self, "Chyba", "Nepodařilo se smazat heslo.")
             return
         try:
-            process = subprocess.Popen(['sudo', 'chpasswd'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            process.communicate(input=f"{user}:{new_p}\n")
+            # Použijeme absolutní cestu /usr/sbin/chpasswd
+            process = subprocess.Popen(['sudo', '/usr/sbin/chpasswd'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            out, err = process.communicate(input=f"{user}:{new_p}\n")
             
             if process.returncode == 0:
                 QMessageBox.information(self, "Úspěch", "Vaše nové heslo bylo úspěšně nastaveno.")
                 self.close()
             else:
-                QMessageBox.warning(self, "Chyba", "Systém odmítl heslo nastavit.")
+                # Tady je ta záchrana! Vypíše to skutečný důvod, proč to Linux zařízl.
+                QMessageBox.warning(self, "Chyba Systému", f"Systém odmítl heslo nastavit.\n\nTechnický důvod:\n{err}")
         except Exception as e:
-            QMessageBox.critical(self, "Chyba", f"Došlo k chybě: {str(e)}")
+            QMessageBox.critical(self, "Chyba", f"Došlo ke kritické chybě: {str(e)}")
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
