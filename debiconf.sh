@@ -567,6 +567,9 @@ lxqt_setup_system_integrations() {
         echo -e "\n[Volume]\nAutoRun=false\nMountOnStartup=true\nMountRemovable=true" >> "$PCMANFM_CONF"
     fi
 
+    mkdir -p /etc/polkit-1/rules.d
+    printf 'polkit.addRule(function(action, subject) {\n    if ((action.id == "org.freedesktop.systemd1.manage-units" || \n         action.id == "org.freedesktop.systemd1.manage-unit-files") &&\n        subject.isInGroup("sudo")) {\n        var unit = action.lookup("unit");\n        if (unit == "rustdesk.service" || unit == "rustdesk") {\n            return polkit.Result.YES;\n        }\n    }\n});\n' > /etc/polkit-1/rules.d/60-rustdesk.rules
+
     chown "$REAL_USER:$REAL_USER" "$PCMANFM_CONF"
 }
 
