@@ -463,6 +463,13 @@ lxqt_prepare_base_configs() {
     if [ -f "$CONF_SRC/qps.conf" ]; then
         cp "$CONF_SRC/qps.conf" "$QPS_DST_DIR/qps.conf"
     fi
+
+    # Flameshot konfigurace (přejmenování .conf na .ini)
+    local FLAMESHOT_DST_DIR="$USER_HOME/.config/flameshot"
+    mkdir -p "$FLAMESHOT_DST_DIR"
+    if [ -f "$CONF_SRC/flameshot.conf" ]; then
+        cp "$CONF_SRC/flameshot.conf" "$FLAMESHOT_DST_DIR/flameshot.ini"
+    fi
 }
 
 lxqt_setup_system_integrations() {
