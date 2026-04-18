@@ -38,12 +38,15 @@ Po dokončení čisté netinst instalace bez prostředí:
 - ready out of the box pro běžného uživatele, customizace je však strohá, méně moderní vzhled, avšak extrémně svižné i na úplném šrotu
 - *Klávesové zkratky*
   - Win + V = zobrazení historie schránky
+  - Win + E = spuštění průzkumníka
   - Win + D = zobrazení plochy
-  - Win + Mezerník = hledání nastavení, aplikací, souborů na interním či externím disku
+  - Win + L = uzamčení obrazovky
+  - Win + S = hledání nastavení, aplikací, souborů na interním či externím disku
   - Win + Shift + S = pořízení screenshotu
   - Ctrl + Shift + ESC = správce úloh
-  - Ctrl + Alt + Delete = kontextová nabídka pro uzamčení, odhlášení, správce úloh, apod.
+  - Ctrl + Alt + Delete = kontextová nabídka pro uzamčení, odhlášení, změnu hesla, správce úloh.
   - Alt + Tab = přepínání mezi okny apikací
+  - Ctrl + Alt + T = spuštění terminálu
   
 ![lxqt](https://github.com/user-attachments/assets/ba057bfa-8508-444f-af25-8de0b2706106)
 
