@@ -293,6 +293,13 @@ lxqt_setup_apps_and_defaults() {
         su - "$REAL_USER" -c "xdg-settings set default-web-browser $BROWSER_DESKTOP 2>/dev/null" || true
         su - "$REAL_USER" -c "xdg-mime default $BROWSER_DESKTOP x-scheme-handler/http 2>/dev/null" || true
         su - "$REAL_USER" -c "xdg-mime default $BROWSER_DESKTOP x-scheme-handler/https 2>/dev/null" || true
+        
+        # --- TVRDÉ UMLČENÍ INTERNÍHO HLÍDAČE VÝCHOZOSTI (CHROME) ---
+        if [ "$BROWSER_CHOICE" == "1" ]; then
+            log "Vynucuji firemní politiku pro umlčení Chrome hlášky..."
+            mkdir -p /etc/opt/chrome/policies/managed
+            echo '{"DefaultBrowserSettingEnabled": false}' > /etc/opt/chrome/policies/managed/default_browser.json
+        fi
 
         # Kladivo přes Debian Alternatives
         if [ -x "$BROWSER_BIN" ]; then
@@ -537,44 +544,31 @@ install_packages() {
             log "Inicializuji Wine profil potichu, aby neotravoval uživatele..."
             su - "$REAL_USER" -c "WINEDLLOVERRIDES=mscoree,mshtml= wineboot -u" || true
 
-            # --- WINE DYNAMICKÁ EMULACE OBRAZOVKY ---
-            log "Nasazuji dynamickou synchronizaci virtuální plochy Wine..."
+            # --- WINE: PEVNÉ NASTAVENÍ VIRTUÁLNÍ PLOCHY (BEZ AUTOSTARTU) ---
+            log "Nastavuji Wine virtuální plochu napevno..."
             
-            # ZÁCHRANA PROMĚNNÉ: Pokud v USER_HOME chybí úvodní lomítko, doplníme ho
-            if [[ "$USER_HOME" != /* ]]; then
-                USER_HOME="/$USER_HOME"
-            fi
+            # 1. Zjistíme aktuální rozlišení (pokud běžíme v X11, jinak tam padne 1920x1080)
+            NATIVE_RES=$(xrandr 2>/dev/null | grep '\*' | awk '{print $1}' | head -n 1)
+            [ -z "$NATIVE_RES" ] && NATIVE_RES="1920x1080"
             
-            local WINE_SYNC_BIN="$USER_HOME/.local/bin/wine-screensync.sh"
-            local AUTOSTART_DIR="$USER_HOME/.config/autostart"
-
-            # FIX: Jistota, že složky reálně existují, jinak do nich echo nesmí zapisovat
-            mkdir -p "$USER_HOME/.local/bin" || true
-            mkdir -p "$AUTOSTART_DIR" || true
+            # 2. Vytvoříme tetě malý skript, na který může kliknout JEN KDYŽ by někdy měnila monitor
+            local WINE_SYNC_BIN="$USER_HOME/.local/bin/opravit-rozliseni-wine.sh"
+            mkdir -p "$USER_HOME/.local/bin"
             
             echo '#!/bin/bash' > "$WINE_SYNC_BIN"
-            echo "NATIVE_RES=\$(xrandr | grep '\*' | awk '{print \$1}' | head -n 1)" >> "$WINE_SYNC_BIN"
-            echo '[ -z "$NATIVE_RES" ] && NATIVE_RES="1920x1080"' >> "$WINE_SYNC_BIN"
-            echo '' >> "$WINE_SYNC_BIN"
-            echo '# Nastaví registry jen pokud adresář .wine už existuje' >> "$WINE_SYNC_BIN"
-            echo 'if [ -d "$HOME/.wine" ]; then' >> "$WINE_SYNC_BIN"
-            echo '    wine reg add "HKCU\Software\Wine\Explorer" /v "Desktop" /t REG_SZ /d "Default" /f >/dev/null 2>&1' >> "$WINE_SYNC_BIN"
-            echo '    wine reg add "HKCU\Software\Wine\Explorer\Desktops" /v "Default" /t REG_SZ /d "$NATIVE_RES" /f >/dev/null 2>&1' >> "$WINE_SYNC_BIN"
-            echo 'fi' >> "$WINE_SYNC_BIN"
-
+            echo "RES=\$(xrandr | grep '\*' | awk '{print \$1}' | head -n 1)" >> "$WINE_SYNC_BIN"
+            echo '[ -z "$RES" ] && RES="1920x1080"' >> "$WINE_SYNC_BIN"
+            echo 'wine reg add "HKCU\Software\Wine\Explorer" /v "Desktop" /t REG_SZ /d "Default" /f >/dev/null 2>&1' >> "$WINE_SYNC_BIN"
+            echo 'wine reg add "HKCU\Software\Wine\Explorer\Desktops" /v "Default" /t REG_SZ /d "$RES" /f >/dev/null 2>&1' >> "$WINE_SYNC_BIN"
             chmod +x "$WINE_SYNC_BIN"
-            
-            local WINE_SYNC_DESKTOP="$AUTOSTART_DIR/wine-screensync.desktop"
-            echo "[Desktop Entry]" > "$WINE_SYNC_DESKTOP"
-            echo "Type=Application" >> "$WINE_SYNC_DESKTOP"
-            echo "Name=Wine Screen Sync" >> "$WINE_SYNC_DESKTOP"
-            echo "Exec=$WINE_SYNC_BIN" >> "$WINE_SYNC_DESKTOP"
-            echo "Hidden=false" >> "$WINE_SYNC_DESKTOP"
-            echo "NoDisplay=true" >> "$WINE_SYNC_DESKTOP"
-            echo "X-GNOME-Autostart-enabled=true" >> "$WINE_SYNC_DESKTOP"
+
+            # Spustíme to rovnou teď jednorázově pro aktuální monitor (pokud už má .wine složku)
+            if [ -d "$USER_HOME/.wine" ]; then
+                su - "$REAL_USER" -c "$WINE_SYNC_BIN" || true
+            fi
         fi
     fi
-    # ---------------------------------------------------------
+            # ---------------------------------------------------------
 
 if [ "$RUSTDESK_REQ" == "TRUE" ]; then
         log "Instalace RustDesku zahájena (čistá Flatpak metoda)..."
