@@ -544,31 +544,26 @@ install_packages() {
             log "Inicializuji Wine profil potichu, aby neotravoval uživatele..."
             su - "$REAL_USER" -c "WINEDLLOVERRIDES=mscoree,mshtml= wineboot -u" || true
 
-            # --- WINE: PEVNÉ NASTAVENÍ VIRTUÁLNÍ PLOCHY (BEZ AUTOSTARTU) ---
-            log "Nastavuji Wine virtuální plochu napevno..."
-            
-            # 1. Zjistíme aktuální rozlišení (pokud běžíme v X11, jinak tam padne 1920x1080)
-            NATIVE_RES=$(xrandr 2>/dev/null | grep '\*' | awk '{print $1}' | head -n 1)
-            [ -z "$NATIVE_RES" ] && NATIVE_RES="1920x1080"
-            
-            # 2. Vytvoříme tetě malý skript, na který může kliknout JEN KDYŽ by někdy měnila monitor
-            local WINE_SYNC_BIN="$USER_HOME/.local/bin/opravit-rozliseni-wine.sh"
-            mkdir -p "$USER_HOME/.local/bin"
-            
-            echo '#!/bin/bash' > "$WINE_SYNC_BIN"
-            echo "RES=\$(xrandr | grep '\*' | awk '{print \$1}' | head -n 1)" >> "$WINE_SYNC_BIN"
-            echo '[ -z "$RES" ] && RES="1920x1080"' >> "$WINE_SYNC_BIN"
-            echo 'wine reg add "HKCU\Software\Wine\Explorer" /v "Desktop" /t REG_SZ /d "Default" /f >/dev/null 2>&1' >> "$WINE_SYNC_BIN"
-            echo 'wine reg add "HKCU\Software\Wine\Explorer\Desktops" /v "Default" /t REG_SZ /d "$RES" /f >/dev/null 2>&1' >> "$WINE_SYNC_BIN"
-            chmod +x "$WINE_SYNC_BIN"
+            apt-get install -y binfmt-support wine-binfmt icoextract icoextract-thumbnailer || true
 
-            # Spustíme to rovnou teď jednorázově pro aktuální monitor (pokud už má .wine složku)
-            if [ -d "$USER_HOME/.wine" ]; then
-                su - "$REAL_USER" -c "$WINE_SYNC_BIN" || true
-            fi
+            # --- SYSTÉMOVÉ POJIŠTĚNÍ WINE ---
+            log "Aktivuji jádrovou podporu pro .exe a čistím cache..."
+            
+            # Instalace podpory ikon a jádra (pokud už nemáš v apt seznamu)
+            apt install -y binfmt-support wine-binfmt icoextract icoextract-thumbnailer
+            
+            # Tohle prostě musí proběhnout jako příkaz, aby to jádro pochopilo
+            /usr/sbin/update-binfmts --enable wine || true
+            systemctl restart systemd-binfmt || true
+            
+            # Propojení MIME (aby systém věděl, že má použít ten vygenerovaný wine.desktop)
+            su - "$REAL_USER" -c "xdg-mime default wine.desktop application/x-ms-dos-executable" || true
+            su - "$REAL_USER" -c "update-desktop-database ~/.local/share/applications" || true
+            
+            # Vymazání cache, aby se ty ikony exáčů hned načetly
+            rm -rf "$USER_HOME/.cache/thumbnails/*" || true
         fi
     fi
-            # ---------------------------------------------------------
 
 if [ "$RUSTDESK_REQ" == "TRUE" ]; then
         log "Instalace RustDesku zahájena (čistá Flatpak metoda)..."
