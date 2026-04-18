@@ -531,6 +531,10 @@ lxqt_setup_system_integrations() {
     mkdir -p /etc/polkit-1/rules.d
     printf 'polkit.addRule(function(action, subject) {\n    if ((action.id == "org.freedesktop.systemd1.manage-units" || \n         action.id == "org.freedesktop.systemd1.manage-unit-files") &&\n        subject.isInGroup("sudo")) {\n        var unit = action.lookup("unit");\n        if (unit == "rustdesk.service" || unit == "rustdesk") {\n            return polkit.Result.YES;\n        }\n    }\n});\n' > /etc/polkit-1/rules.d/60-rustdesk.rules
 
+    # Passwd manažer
+    echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/passwd, /usr/sbin/chpasswd, /bin/rm, /bin/mkdir, /bin/bash" | sudo tee /etc/sudoers.d/99-gui-pass-manager
+    sudo chmod 0440 /etc/sudoers.d/99-gui-pass-manager 
+
     chown "$REAL_USER:$REAL_USER" "$PCMANFM_CONF"
 }
 
@@ -1110,12 +1114,7 @@ setup_boot() {
 
 admin_security() {
     if [ "$ROOT_ADMIN_ONLY" == "TRUE" ]; then
-        log "Zabezpečuji systém: Nastavuji sudo na vyžadování hesla ROOT..."
-
-        # Povolí uživateli měnit heslo bez zadávání starého hesla v SUDO
-        echo "$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/chpasswd, /usr/bin/passwd *" | sudo tee /etc/sudoers.d/99-passwd-nopass
-        sudo chmod 0440 /etc/sudoers.d/99-passwd-nopass
-        
+        log "Zabezpečuji systém: Nastavuji sudo na vyžadování hesla ROOT..."         
         if grep -q '^root:[!\*]' /etc/shadow; then
             log "CHYBA: Účet root je zamčen nebo nemá nastavené heslo!"
             log "Bezpečnostní pojistka: Sudo bude dál chtít heslo uživatele, jinak by se systém zablokoval."

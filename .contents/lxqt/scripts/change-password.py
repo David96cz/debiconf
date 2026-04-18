@@ -10,11 +10,13 @@ from PyQt5.QtCore import Qt
 class PasswordChanger(QWidget):
     def __init__(self):
         super().__init__()
+        self.user_name = os.getlogin()
+        self.autologin_conf = "/etc/lightdm/lightdm.conf.d/autologin.conf"
         self.initUI()
 
     def initUI(self):
         self.setWindowTitle('Změna uživatelského hesla')
-        self.setFixedSize(420, 270)
+        self.setFixedSize(420, 310)
         self.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
         
         layout = QVBoxLayout()
@@ -42,7 +44,14 @@ class PasswordChanger(QWidget):
         self.cb_show_pass.stateChanged.connect(self.toggle_echo_mode)
         layout.addWidget(self.cb_show_pass)
 
-        self.btn_save = QPushButton('Uložit a nastavit')
+        # CHECKBOX: Autologin (LightDM)
+        self.cb_autologin = QCheckBox('Automatické přihlášení (při startu nechce heslo)')
+        if os.path.exists(self.autologin_conf):
+            self.cb_autologin.setChecked(True)
+        self.cb_autologin.stateChanged.connect(self.toggle_autologin)
+        layout.addWidget(self.cb_autologin)
+
+        self.btn_save = QPushButton('Uložit heslo')
         self.btn_save.setStyleSheet("background-color: #2a7fca; color: white; padding: 10px; font-weight: bold; border-radius: 5px;")
         self.btn_save.setCursor(Qt.PointingHandCursor)
         self.btn_save.clicked.connect(self.handle_change)
@@ -58,6 +67,29 @@ class PasswordChanger(QWidget):
         else:
             self.new_pass.setEchoMode(QLineEdit.Password)
             self.new_pass_confirm.setEchoMode(QLineEdit.Password)
+
+    def toggle_autologin(self, state):
+        conf_dir = "/etc/lightdm/lightdm.conf.d"
+        
+        if state == Qt.Checked:
+            cmd = f"mkdir -p {conf_dir} && echo '[Seat:*]\nautologin-user={self.user_name}\nautologin-user-timeout=0' > {self.autologin_conf}"
+            try:
+                subprocess.run(['sudo', 'bash', '-c', cmd], check=True)
+                QMessageBox.information(self, "Nastavení přihlášení", "Automatické přihlášení bylo ZAPNUTO.\nPočítač půjde po startu rovnou na plochu.")
+            except Exception as e:
+                QMessageBox.critical(self, "Chyba", f"Nepodařilo se zapnout automatické přihlášení.\n{e}")
+                self.cb_autologin.blockSignals(True)
+                self.cb_autologin.setChecked(False)
+                self.cb_autologin.blockSignals(False)
+        else:
+            try:
+                subprocess.run(['sudo', 'rm', '-f', self.autologin_conf], check=True)
+                QMessageBox.information(self, "Nastavení přihlášení", "Automatické přihlášení bylo VYPNUTO.\nPři startu bude vyžadováno heslo.")
+            except Exception as e:
+                QMessageBox.critical(self, "Chyba", f"Nepodařilo se vypnout automatické přihlášení.\n{e}")
+                self.cb_autologin.blockSignals(True)
+                self.cb_autologin.setChecked(True)
+                self.cb_autologin.blockSignals(False)
 
     def verify_current_password(self, old_p):
         try:
@@ -85,7 +117,6 @@ class PasswordChanger(QWidget):
         old_p = self.old_pass.text()
         new_p = self.new_pass.text()
         conf_p = self.new_pass_confirm.text()
-        user = os.getlogin()
 
         if new_p != conf_p:
             QMessageBox.warning(self, "Chyba", "Nová hesla se neshodují!")
@@ -102,19 +133,19 @@ class PasswordChanger(QWidget):
             
             if reply == QMessageBox.Yes:
                 try:
-                    subprocess.run(['sudo', 'passwd', '-d', user], check=True)
+                    subprocess.run(['sudo', 'passwd', '-d', self.user_name], check=True)
                     QMessageBox.information(self, "Hotovo", "Heslo bylo úspěšně odstraněno.")
-                    self.close()
+                    # self.close() odstraněno
                 except:
                     QMessageBox.critical(self, "Chyba", "Nepodařilo se smazat heslo.")
             return
         try:
             process = subprocess.Popen(['sudo', '/usr/sbin/chpasswd'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            out, err = process.communicate(input=f"{user}:{new_p}\n")
+            out, err = process.communicate(input=f"{self.user_name}:{new_p}\n")
             
             if process.returncode == 0:
                 QMessageBox.information(self, "Úspěch", "Vaše nové heslo bylo úspěšně nastaveno.")
-                self.close()
+                # self.close() odstraněno
             else:
                 QMessageBox.warning(self, "Chyba Systému", f"Systém odmítl heslo nastavit.\n\nTechnický důvod:\n{err}")
         except Exception as e:
