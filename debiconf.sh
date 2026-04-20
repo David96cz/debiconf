@@ -221,8 +221,7 @@ init_setup() {
         echo " Prostředí:        $DESKTOP_STR"
         echo " Prohlížeč:        $BROWSER_STR"
         echo " Office:           $OFFICE_STR"
-        echo " Autologin:        $AUTOLOGIN_STR"
-        echo " Zámek Sudo:       $ROOT_STR"
+        echo " Bezpečnost:       $SEC_STR"
         echo " Wine podpora:     $WINE_STR"
         echo " RustDesk:         $RUSTDESK_STR"
         echo -e "\033[1;36m==================================================\033[0m"
@@ -472,8 +471,6 @@ prepare_system() {
     log "Základní příprava systému a sítě..."
     apt-get update -qq
     apt-get install -y sudo curl wget dpkg-dev git dbus-x11 numlockx plymouth plymouth-themes
-    
-    usermod -aG sudo,audio,video,plugdev,lpadmin,netdev,dialout,cdrom "$REAL_USER"
 
     # Likvidace starého síťového mozku
     apt-get purge -y ifupdown || true
@@ -1454,6 +1451,8 @@ setup_boot() {
 
 admin_security() {
     log "Aplikuji bezpečnostní profil: $SEC_PROFILE..."
+
+    usermod -aG sudo,audio,video,plugdev,lpadmin,netdev,dialout,cdrom "$REAL_USER"
 
     # 1. ÚKLID: Čistý štít (odstranění zbytků, pokud skript běží opakovaně)
     rm -f "/etc/sudoers.d/99_nopasswd_$REAL_USER"
