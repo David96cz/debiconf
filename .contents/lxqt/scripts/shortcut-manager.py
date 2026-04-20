@@ -12,46 +12,6 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt5.QtCore import Qt, QFileInfo, QSize
 from PyQt5.QtGui import QIcon
 
-# --- POMOCNÉ FUNKCE PRO IKONY A PARSOVÁNÍ (Tvoje osvědčená logika) ---
-def get_app_icon(icon_str):
-    icon = QIcon()
-    if os.path.isabs(icon_str) and os.path.exists(icon_str):
-        return QIcon(icon_str)
-    
-    icon_base = icon_str.rsplit('.', 1)[0] if icon_str.lower().endswith(('.png', '.svg', '.xpm', '.ico')) else icon_str
-    icon = QIcon.fromTheme(icon_base)
-    
-    if icon.isNull():
-        fallback_paths = [
-            f"/usr/share/pixmaps/{icon_base}.png",
-            f"/usr/share/pixmaps/{icon_base}.svg",
-            f"{os.path.expanduser('~')}/.local/share/icons/{icon_base}.png",
-            f"{os.path.expanduser('~')}/.local/share/icons/{icon_base}.svg"
-        ]
-        for path in fallback_paths:
-            if os.path.exists(path):
-                icon = QIcon(path)
-                break
-    
-    if icon.isNull():
-        icon = QIcon.fromTheme("application-x-executable")
-    return icon
-
-def parse_desktop_file(filepath):
-    name, name_cs, icon_str = "", "", "application-x-executable"
-    try:
-        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-            in_main = False
-            for line in f:
-                line = line.strip()
-                if line.startswith("["): in_main = (line == "[Desktop Entry]"); continue
-                if not in_main: continue
-                if line.startswith("Name="): name = line[5:].strip()
-                elif line.startswith("Name[cs]="): name_cs = line[8:].strip()
-                elif line.startswith("Icon="): icon_str = line[5:].strip()
-    except: pass
-    return name_cs if name_cs else (name if name else os.path.basename(filepath)), icon_str
-
 # --- KONFIGURACE ---
 USER_HOME = os.path.expanduser("~")
 APPS_DIR = os.path.join(USER_HOME, ".local/share/applications")
@@ -65,11 +25,37 @@ XDG_CATEGORIES = [
     ("🎒 Příslušenství", "Qt;Utility")
 ]
 
+# --- POMOCNÉ FUNKCE ---
+def get_app_icon(icon_str):
+    if os.path.isabs(icon_str) and os.path.exists(icon_str):
+        return QIcon(icon_str)
+    icon_base = icon_str.rsplit('.', 1)[0] if icon_str.lower().endswith(('.png', '.svg', '.xpm', '.ico')) else icon_str
+    icon = QIcon.fromTheme(icon_base)
+    if icon.isNull():
+        for d in ["/usr/share/pixmaps", os.path.expanduser("~/.local/share/icons")]:
+            for ext in [".png", ".svg"]:
+                p = os.path.join(d, icon_base + ext)
+                if os.path.exists(p): return QIcon(p)
+    return icon if not icon.isNull() else QIcon.fromTheme("application-x-executable")
+
+def parse_desktop_file(filepath):
+    """Vrací (Jméno, Ikona, jeVlastní)"""
+    name, name_cs, icon, custom = "", "", "application-x-executable", False
+    try:
+        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+            for line in f:
+                if line.startswith("Name="): name = line.split("=", 1)[1].strip()
+                elif line.startswith("Name[cs]="): name_cs = line.split("=", 1)[1].strip()
+                elif line.startswith("Icon="): icon = line.split("=", 1)[1].strip()
+                elif "X-Debiconf-Custom=true" in line: custom = True
+    except: pass
+    return (name_cs if name_cs else name), icon, custom
+
 class ShortcutApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Správce Zástupců (Debiconf LXQt)")
-        self.resize(750, 650)
+        self.resize(800, 600)
         
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
@@ -113,7 +99,7 @@ class ShortcutApp(QMainWindow):
         self.intel_group = QGroupBox("Inteligentní nastavení")
         intel_layout = QVBoxLayout(self.intel_group)
         self.terminal_cb = QCheckBox("Spustit v terminálu")
-        self.wrapper_cb = QCheckBox("Použít Python Wrapper")
+        self.wrapper_cb = QCheckBox("Indikace načítání (Wrapper)")
         self.wrapper_cb.setChecked(True)
         intel_layout.addWidget(self.terminal_cb); intel_layout.addWidget(self.wrapper_cb)
         self.intel_group.hide()
@@ -141,7 +127,6 @@ class ShortcutApp(QMainWindow):
         layout.addWidget(form_group); layout.addStretch(); layout.addWidget(self.create_btn)
         self.tabs.addTab(tab, "Generátor")
 
-    # --- PŘEPSANÝ SPRÁVCE (MANAGER) ---
     def init_manager_tab(self):
         tab = QWidget()
         layout = QVBoxLayout(tab)
@@ -151,69 +136,85 @@ class ShortcutApp(QMainWindow):
         self.search_bar.textChanged.connect(self.filter_apps)
         layout.addWidget(self.search_bar)
         
-        # TABULKA MÍSTO LISTU
         self.table = QTableWidget()
-        self.table.setColumnCount(3)
-        self.table.setHorizontalHeaderLabels(['Viditelný', 'Aplikace', 'Cesta'])
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(['Viditelný', 'Aplikace', 'Typ', 'Cesta'])
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.table.setIconSize(QSize(32, 32))
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
+        self.table.setIconSize(QSize(32, 32))
         
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Fixed)
         self.table.setColumnWidth(0, 70)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
-        self.table.setColumnHidden(2, True) # Skrytá cesta k souboru
+        self.table.setColumnWidth(2, 100)
+        self.table.setColumnHidden(3, True) # Skrytá cesta
         
         layout.addWidget(self.table)
         
         button_layout = QHBoxLayout()
-        self.save_btn = QPushButton("Uložit změny viditelnosti")
+        self.save_btn = QPushButton("Uložit viditelnost")
         self.save_btn.setStyleSheet("background-color: #4caf50; color: white; padding: 10px; font-weight: bold;")
         self.save_btn.clicked.connect(self.save_visibility)
         
-        self.delete_btn = QPushButton("Trvale smazat zástupce")
+        self.delete_btn = QPushButton("Trvale smazat")
         self.delete_btn.setStyleSheet("background-color: #f44336; color: white; padding: 10px; font-weight: bold;")
+        self.delete_btn.setEnabled(False) # Výchozí stav
         self.delete_btn.clicked.connect(self.delete_shortcut)
         
         button_layout.addWidget(self.save_btn); button_layout.addWidget(self.delete_btn)
         layout.addLayout(button_layout)
         
+        self.table.itemSelectionChanged.connect(self.check_delete_permission)
         self.tabs.addTab(tab, "Správce zobrazení")
         self.load_applications()
 
     def load_applications(self):
         self.table.setRowCount(0)
-        apps_data = []
-        # Skenujeme lokální i systémové
-        for d in [APPS_DIR, SYSTEM_APPS_DIR]:
+        apps_dict = {} # Deduplikace podle názvu souboru
+        
+        for d in [SYSTEM_APPS_DIR, APPS_DIR]:
             if not os.path.exists(d): continue
             for f in os.listdir(d):
                 if f.endswith(".desktop"):
                     path = os.path.join(d, f)
-                    name, icon = parse_desktop_file(path)
-                    if name: apps_data.append((name, icon, path))
+                    name, icon, is_custom = parse_desktop_file(path)
+                    if name:
+                        apps_dict[f] = {"name": name, "icon": icon, "path": path, "custom": is_custom}
 
-        apps_data.sort(key=lambda x: x[0].lower())
-        self.table.setRowCount(len(apps_data))
+        sorted_keys = sorted(apps_dict.keys(), key=lambda x: apps_dict[x]["name"].lower())
+        self.table.setRowCount(len(sorted_keys))
         
-        for row, (name, icon_str, path) in enumerate(apps_data):
+        for row, key in enumerate(sorted_keys):
+            data = apps_dict[key]
             # Checkbox
             ck_widget = QWidget()
             ck_layout = QHBoxLayout(ck_widget)
             cb = QCheckBox()
-            with open(path, 'r', errors='ignore') as f:
-                cb.setChecked("NoDisplay=true" not in f.read())
-            ck_layout.addWidget(cb); ck_layout.setAlignment(Qt.AlignCenter); ck_layout.setContentsMargins(0, 0, 0, 0)
+            with open(data["path"], 'r', errors='ignore') as f: cb.setChecked("NoDisplay=true" not in f.read())
+            ck_layout.addWidget(cb); ck_layout.setAlignment(Qt.AlignCenter); ck_layout.setContentsMargins(0,0,0,0)
             self.table.setCellWidget(row, 0, ck_widget)
             
             # Ikona + Jméno
-            item = QTableWidgetItem(name)
-            item.setIcon(get_app_icon(icon_str))
+            item = QTableWidgetItem(data["name"])
+            item.setIcon(get_app_icon(data["icon"]))
             self.table.setItem(row, 1, item)
-            self.table.setItem(row, 2, QTableWidgetItem(path))
+            
+            # Typ
+            typ_item = QTableWidgetItem("Uživatelský" if data["custom"] else "Systémový")
+            if data["custom"]: typ_item.setForeground(Qt.blue)
+            self.table.setItem(row, 2, typ_item)
+            
+            # Cesta (skrytá)
+            self.table.setItem(row, 3, QTableWidgetItem(data["path"]))
+
+    def check_delete_permission(self):
+        row = self.table.currentRow()
+        if row < 0:
+            self.delete_btn.setEnabled(False)
+            return
+        is_custom = (self.table.item(row, 2).text() == "Uživatelský")
+        self.delete_btn.setEnabled(is_custom)
 
     def filter_apps(self, text):
         for i in range(self.table.rowCount()):
@@ -222,56 +223,46 @@ class ShortcutApp(QMainWindow):
 
     def save_visibility(self):
         for i in range(self.table.rowCount()):
-            path = self.table.item(i, 2).text()
+            path = self.table.item(i, 3).text()
             visible = self.table.cellWidget(i, 0).layout().itemAt(0).widget().isChecked()
             
-            # Pokud je to systémová aplikace, musíme ji pro skrytí zkopírovat do local
-            target_path = path
+            # Pokud je systémová a chceme ji skrýt, zkopírujeme ji do local
+            target = path
             if path.startswith(SYSTEM_APPS_DIR) and not visible:
-                target_path = os.path.join(APPS_DIR, os.path.basename(path))
-                if not os.path.exists(target_path):
+                target = os.path.join(APPS_DIR, os.path.basename(path))
+                if not os.path.exists(target):
                     if not os.path.exists(APPS_DIR): os.makedirs(APPS_DIR)
-                    shutil.copy(path, target_path)
+                    shutil.copy(path, target)
 
             try:
-                with open(target_path, 'r', errors='ignore') as f: lines = f.readlines()
-                with open(target_path, 'w') as f:
+                with open(target, 'r', errors='ignore') as f: lines = f.readlines()
+                with open(target, 'w') as f:
                     for line in lines:
                         if not line.startswith("NoDisplay="): f.write(line)
                     if not visible: f.write("NoDisplay=true\n")
             except: continue
                     
         self.refresh_system_menu()
-        QMessageBox.information(self, "Uloženo", "Změny viditelnosti byly uloženy.")
+        QMessageBox.information(self, "Hotovo", "Změny uloženy.")
 
     def delete_shortcut(self):
         row = self.table.currentRow()
-        if row < 0:
-            QMessageBox.warning(self, "Smazat", "Vyberte aplikaci z tabulky.")
-            return
-            
-        path = self.table.item(row, 2).text()
-        if path.startswith(SYSTEM_APPS_DIR):
-            QMessageBox.critical(self, "Chyba", "Systémové aplikace nelze smazat, pouze skrýt checkboxem!")
-            return
-            
-        if QMessageBox.question(self, "Smazat", "Smazat tento zástupce trvale?", QMessageBox.Yes|QMessageBox.No) == QMessageBox.Yes:
+        path = self.table.item(row, 3).text()
+        if QMessageBox.question(self, "Smazat", "Smazat tento zástupce?") == QMessageBox.Yes:
             try:
                 os.remove(path)
-                self.refresh_system_menu()
                 self.load_applications()
+                self.refresh_system_menu()
             except: pass
 
-    # --- OSTATNÍ FUNKCE ---
+    # --- ZBYTEK LOGIKY (Generátor) ---
     def refresh_system_menu(self):
         subprocess.run(["update-desktop-database", APPS_DIR], capture_output=True)
-        # Volání panelu pod správným uživatelem
         subprocess.run(["lxqt-panel", "--restart"], capture_output=True)
 
     def toggle_comment_mode(self):
-        is_auto = self.auto_comment_cb.isChecked()
-        self.comment_input.setEnabled(not is_auto)
-        if is_auto: self.update_auto_comment()
+        self.comment_input.setEnabled(not self.auto_comment_cb.isChecked())
+        if self.auto_comment_cb.isChecked(): self.update_auto_comment()
 
     def update_auto_comment(self):
         if self.auto_comment_cb.isChecked(): self.comment_input.setText(f"Spustit {self.name_input.text()}")
@@ -301,8 +292,7 @@ class ShortcutApp(QMainWindow):
         info = QFileInfo(exe_path)
         tmp_ico = f"/tmp/{info.baseName()}.ico"
         try:
-            with open(tmp_ico, "wb") as f:
-                subprocess.run(["wrestool", "-x", "-t", "14", exe_path], stdout=f)
+            with open(tmp_ico, "wb") as f: subprocess.run(["wrestool", "-x", "-t", "14", exe_path], stdout=f)
             if os.path.exists(tmp_ico) and os.path.getsize(tmp_ico) > 0:
                 out_dir = f"/tmp/{info.baseName()}_png"
                 os.makedirs(out_dir, exist_ok=True)
@@ -311,22 +301,18 @@ class ShortcutApp(QMainWindow):
                 if pngs:
                     best = max(pngs, key=os.path.getsize)
                     target = os.path.join(info.absolutePath(), f"{info.baseName()}.png")
-                    shutil.copy(best, target)
-                    self.icon_input.setText(target)
+                    shutil.copy(best, target); self.icon_input.setText(target)
                     QMessageBox.information(self, "OK", "Ikona vytažena!")
-        except Exception as e: QMessageBox.critical(self, "Chyba", str(e))
+        except: pass
 
     def pick_icon_file(self):
         fname, _ = QFileDialog.getOpenFileName(self, "Vyber ikonu", "/usr/share/icons")
         if fname: self.icon_input.setText(fname)
 
     def create_shortcut(self):
-        name = self.name_input.text().strip()
-        exec_path = self.exec_input.text().strip()
+        name, exec_path = self.name_input.text().strip(), self.exec_input.text().strip()
         if not name or not exec_path: return
-        
-        final_exec = exec_path
-        if exec_path.lower().endswith('.exe'): final_exec = f"wine \"{exec_path}\""
+        final_exec = f"wine \"{exec_path}\"" if exec_path.lower().endswith('.exe') else exec_path
         if self.wrapper_cb.isChecked(): final_exec = f"python3 \"{BUSY_SCRIPT}\" {final_exec}"
         
         safe_name = "".join([c for c in name if c.isalnum() or c==' ']).replace(' ', '-').lower()
@@ -335,11 +321,10 @@ class ShortcutApp(QMainWindow):
         try:
             if not os.path.exists(APPS_DIR): os.makedirs(APPS_DIR)
             with open(output_file, 'w') as f:
-                f.write(f"[Desktop Entry]\nX-Debiconf-Custom=true\nType=Application\nName={name}\nExec={final_exec}\nIcon={self.icon_input.text() or 'applications-other'}\nTerminal={'true' if self.terminal_cb.isChecked() else 'false'}\nCategories={self.category_input.currentData()};\n")
+                f.write(f"[Desktop Entry]\nX-Debiconf-Custom=true\\nType=Application\\nName={name}\\nExec={final_exec}\\nIcon={self.icon_input.text() or 'applications-other'}\\nTerminal={'true' if self.terminal_cb.isChecked() else 'false'}\\nCategories={self.category_input.currentData()};\\n")
             os.chmod(output_file, 0o755)
-            self.refresh_system_menu()
-            self.load_applications()
-            QMessageBox.information(self, "OK", "Zástupce vytvořen!")
+            self.load_applications(); self.refresh_system_menu()
+            QMessageBox.information(self, "OK", "Vytvořeno!")
         except Exception as e: QMessageBox.critical(self, "Chyba", str(e))
 
 if __name__ == "__main__":

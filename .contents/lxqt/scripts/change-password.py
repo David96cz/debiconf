@@ -70,6 +70,22 @@ class PasswordChanger(QWidget):
 
     def toggle_autologin(self, state):
         conf_dir = "/etc/lightdm/lightdm.conf.d"
+        if state == Qt.Checked:
+            # ZAPNUTÍ: Použijeme lxqt-sudo pro jistotu zápisu
+            cmd = f"mkdir -p {conf_dir} && echo -e '[Seat:*]\\nautologin-user={self.user_name}\\nautologin-user-timeout=0' > {self.autologin_conf}"
+            try:
+                subprocess.run(['lxqt-sudo', 'bash', '-c', cmd], check=True)
+                QMessageBox.information(self, "Hotovo", "Automatické přihlášení zapnuto.")
+            except:
+                self.cb_autologin.setChecked(False)
+        else:
+            # VYPNUTÍ: Stačí soubor vyprázdnit
+            try:
+                subprocess.run(['lxqt-sudo', 'bash', '-c', f"> {self.autologin_conf}"], check=True)
+                QMessageBox.information(self, "Hotovo", "Automatické přihlášení vypnuto.")
+            except:
+                self.cb_autologin.setChecked(True)
+        conf_dir = "/etc/lightdm/lightdm.conf.d"
         
         # Pojistka: Pokud adresář neexistuje, vytvoříme ho (potřeba sudo)
         if state == Qt.Checked and not os.path.exists(conf_dir):
