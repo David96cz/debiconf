@@ -71,10 +71,17 @@ class PasswordChanger(QWidget):
     def toggle_autologin(self, state):
         conf_dir = "/etc/lightdm/lightdm.conf.d"
         
-        if state == Qt.Checked:
-            cmd = f"mkdir -p {conf_dir} && echo '[Seat:*]\nautologin-user={self.user_name}\nautologin-user-timeout=0' > {self.autologin_conf}"
+        # Pojistka: Pokud adresář neexistuje, vytvoříme ho (potřeba sudo)
+        if state == Qt.Checked and not os.path.exists(conf_dir):
             try:
-                subprocess.run(['sudo', 'bash', '-c', cmd], check=True)
+                subprocess.run(['sudo', 'mkdir', '-p', conf_dir], check=True)
+            except: pass
+
+        if state == Qt.Checked:
+            # ZAPNUTÍ: Přepíšeme obsah souboru (použijeme tee, Polkit to pustí)
+            cmd = f"echo -e '[Seat:*]\nautologin-user={self.user_name}\nautologin-user-timeout=0' | sudo tee {self.autologin_conf}"
+            try:
+                subprocess.run(cmd, shell=True, check=True, stdout=subprocess.DEVNULL)
                 QMessageBox.information(self, "Nastavení přihlášení", "Automatické přihlášení bylo ZAPNUTO.\nPočítač půjde po startu rovnou na plochu.")
             except Exception as e:
                 QMessageBox.critical(self, "Chyba", f"Nepodařilo se zapnout automatické přihlášení.\n{e}")
@@ -82,8 +89,10 @@ class PasswordChanger(QWidget):
                 self.cb_autologin.setChecked(False)
                 self.cb_autologin.blockSignals(False)
         else:
+            # VYPNUTÍ: Nesmažeme soubor, jen ho "vynulujeme" (prázdný soubor = žádný autologin)
+            cmd = f"true | sudo tee {self.autologin_conf}"
             try:
-                subprocess.run(['sudo', 'rm', '-f', self.autologin_conf], check=True)
+                subprocess.run(cmd, shell=True, check=True, stdout=subprocess.DEVNULL)
                 QMessageBox.information(self, "Nastavení přihlášení", "Automatické přihlášení bylo VYPNUTO.\nPři startu bude vyžadováno heslo.")
             except Exception as e:
                 QMessageBox.critical(self, "Chyba", f"Nepodařilo se vypnout automatické přihlášení.\n{e}")

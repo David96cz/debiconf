@@ -435,7 +435,7 @@ prepare_system() {
     # Přidán plymouth a plymouth-themes
     apt-get install -y sudo curl wget dpkg-dev git dbus-x11 numlockx plymouth plymouth-themes
     
-    usermod -aG sudo,audio,video,plugdev "$REAL_USER" || true
+    usermod -aG sudo,audio,video,plugdev,lpadmin,netdev,dialout,cdrom "$REAL_USER" || true
 
     apt-get purge -y ifupdown || true
     rm -rf /etc/network/interfaces.d/* || true
@@ -1266,9 +1266,6 @@ configure_plasma() {
     else
         sed -i '/^\[org.kde.spectacle.desktop\]/,/^\[/ s/^RectangularRegionScreenShot=.*/RectangularRegionScreenShot=Meta+Shift+S,Meta+Shift+Print,Draw a rectangle to take a screenshot/' "$SHORTCUTS_CONF" || true
     fi
-
-    usermod -aG lpadmin $REAL_USER
-
     run_as_user "lookandfeeltool -a org.kde.plasma.twilight"
     
     local PLASMARC="$USER_HOME/.config/plasmarc"
