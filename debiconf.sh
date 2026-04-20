@@ -321,6 +321,15 @@ lxqt_setup_apps_and_defaults() {
             4) BROWSER_DESKTOP="firefox-esr.desktop"; [ -x "/usr/bin/firefox" ] && BROWSER_BIN="/usr/bin/firefox" || BROWSER_BIN="/usr/bin/firefox-esr" ;;
         esac
 
+        # Vypnutí otravného Keyringu pro Chromium / Chrome
+        if [ "$BROWSER_DESKTOP" = "google-chrome.desktop" ]; then
+            sed -i 's/Exec=\/usr\/bin\/google-chrome-stable %U/Exec=\/usr\/bin\/google-chrome-stable --password-store=basic %U/g' /usr/share/applications/google-chrome.desktop
+        fi
+
+        if [ "$BROWSER_DESKTOP" = "chromium.desktop" ]; then
+            sed -i 's/Exec=chromium %U/Exec=chromium --password-store=basic %U/g' /usr/share/applications/chromium.desktop
+        fi
+
         log "Nastavuji $BROWSER_DESKTOP jako systémový default a potlačuji hlášky..."
         
         # Nastavení XDG z pohledu uživatele (Umlčí hlášky)
@@ -464,7 +473,7 @@ prepare_system() {
     apt-get update -qq
     apt-get install -y sudo curl wget dpkg-dev git dbus-x11 numlockx plymouth plymouth-themes
     
-    usermod -aG sudo,audio,video,plugdev,lpadmin,netdev,dialout,cdrom "$REAL_USER" || true
+    usermod -aG sudo,audio,video,plugdev,lpadmin,netdev,dialout,cdrom "$REAL_USER"
 
     # Likvidace starého síťového mozku
     apt-get purge -y ifupdown || true
@@ -933,7 +942,7 @@ lxqt_setup_shortcuts_and_menus() {
         done < "$CONTEXT_CONF"
     fi
 
-    # Zástupci z actions.conf - OPRAVENÁ VERZE (Bez custom_shortcut sraček)
+# Zástupci z actions.conf - OPRAVENÁ VERZE (Custom Filenames)
     local LOCAL_APPS_DIR="$USER_HOME/.local/share/applications"
     mkdir -p "$LOCAL_APPS_DIR"
     local SRC_ACTIONS="$CONTENTS_DIR/lxqt/config/actions.conf"
@@ -941,41 +950,66 @@ lxqt_setup_shortcuts_and_menus() {
     if [ -f "$SRC_ACTIONS" ]; then
         local BLOCK=""
         local APP_NAME=""
+        local CUSTOM_FILENAME=""
         
-        # Načítáme soubor a rozdělujeme ho na bloky podle [Desktop Entry]
+        # Načítáme soubor řádek po řádku
         while IFS= read -r line || [ -n "$line" ]; do
-            trimmed=$(echo "$line" | xargs)
+            # Oříznutí bílých znaků (včetně neviditelných \r z Windows)
+            trimmed=$(echo "$line" | tr -d '\r' | xargs)
             
-            if [[ "$trimmed" == "[Desktop Entry]" ]]; then
-                # Pokud už máme v paměti předchozí blok, uložíme ho
+            # 1. Zachycení našeho vlastního jména souboru
+            if [[ "$trimmed" == \[FileName=*\] ]]; then
+                # Pokud už máme uložený předchozí blok, zapíšeme ho
                 if [ -n "$BLOCK" ]; then
-                    # Vytvoření bezpečného jména souboru z APP_NAME
-                    local SAFE_FILENAME=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed -e 's/ /-/g' -e 's/[^a-z0-9-]//g')
-                    [ -z "$SAFE_FILENAME" ] && SAFE_FILENAME="unknown-app-$(date +%s%N)"
+                    local TARGET_FILE="${CUSTOM_FILENAME:-$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed -e 's/ /-/g' -e 's/[^a-z0-9-]//g')}"
+                    [ -z "$TARGET_FILE" ] && TARGET_FILE="unknown-app-$(date +%s%N)"
                     
-                    echo -e "$BLOCK" > "$LOCAL_APPS_DIR/${SAFE_FILENAME}.desktop"
-                    chmod +x "$LOCAL_APPS_DIR/${SAFE_FILENAME}.desktop"
+                    echo -e "$BLOCK" > "$LOCAL_APPS_DIR/${TARGET_FILE}.desktop"
+                    chmod +x "$LOCAL_APPS_DIR/${TARGET_FILE}.desktop"
                 fi
-                # Resetujeme buffer pro nový blok
+                
+                # Vytažení samotného jména (odstranění [FileName= a ])
+                CUSTOM_FILENAME="${trimmed#\[FileName=}"
+                CUSTOM_FILENAME="${CUSTOM_FILENAME%\]}"
+                
+                # Resetujeme buffer, protože hned po tomhle by mělo následovat [Desktop Entry]
+                BLOCK=""
+                APP_NAME=""
+                continue
+            fi
+            
+            # 2. Zachycení začátku bloku zástupce (Pokud tam není FileName)
+            if [[ "$trimmed" == "[Desktop Entry]" ]]; then
+                # Zápis předchozího bloku (pojistka, pokud někdo vynechal [FileName=])
+                if [ -n "$BLOCK" ]; then
+                    local TARGET_FILE="${CUSTOM_FILENAME:-$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed -e 's/ /-/g' -e 's/[^a-z0-9-]//g')}"
+                    [ -z "$TARGET_FILE" ] && TARGET_FILE="unknown-app-$(date +%s%N)"
+                    
+                    echo -e "$BLOCK" > "$LOCAL_APPS_DIR/${TARGET_FILE}.desktop"
+                    chmod +x "$LOCAL_APPS_DIR/${TARGET_FILE}.desktop"
+                    CUSTOM_FILENAME=""
+                fi
                 BLOCK="[Desktop Entry]"
                 APP_NAME=""
+                
+            # 3. Zpracování vnitřku bloku
             elif [ -n "$BLOCK" ] && [ -n "$trimmed" ]; then
-                # Zpracování řádků uvnitř bloku
                 local processed_line="${line//~\/.local/$USER_HOME\/.local}"
                 BLOCK="${BLOCK}\n${processed_line}"
                 
-                # Pokud narazíme na Name, uložíme si ho pro název souboru
                 if [[ "$processed_line" == Name=* ]]; then
                     APP_NAME="${processed_line#Name=}"
                 fi
             fi
         done < "$SRC_ACTIONS"
         
-        # Nezapomenout uložit úplně poslední blok ze souboru
+        # Nezapomenout uložit úplně poslední blok ze souboru!
         if [ -n "$BLOCK" ]; then
-            local SAFE_FILENAME=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed -e 's/ /-/g' -e 's/[^a-z0-9-]//g')
-            echo -e "$BLOCK" > "$LOCAL_APPS_DIR/${SAFE_FILENAME}.desktop"
-            chmod +x "$LOCAL_APPS_DIR/${SAFE_FILENAME}.desktop"
+            local TARGET_FILE="${CUSTOM_FILENAME:-$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed -e 's/ /-/g' -e 's/[^a-z0-9-]//g')}"
+            [ -z "$TARGET_FILE" ] && TARGET_FILE="unknown-app-$(date +%s%N)"
+            
+            echo -e "$BLOCK" > "$LOCAL_APPS_DIR/${TARGET_FILE}.desktop"
+            chmod +x "$LOCAL_APPS_DIR/${TARGET_FILE}.desktop"
         fi
     fi
 }
@@ -1027,6 +1061,17 @@ lxqt_packages_install() {
         wget -qO /tmp/peazip_latest.deb "$PEAZIP_URL"
         dpkg -i /tmp/peazip_latest.deb || apt-get install -f -y
         rm -f /tmp/peazip_latest.deb
+
+        # --- KASTRACE PEAZIPU ---
+        # Zabráníme PeaZipu, aby se do systému hlásil jako otvírák na .exe soubory
+        PEAZIP_DESKTOP="/usr/share/applications/peazip.desktop"
+        
+        if [ -f "$PEAZIP_DESKTOP" ]; then
+            log "Odstraňuji asociaci .exe z PeaZipu u zdroje..."
+            sed -i 's/application\/x-ms-dos-executable;//g' "$PEAZIP_DESKTOP"
+            sed -i 's/application\/x-msdownload;//g' "$PEAZIP_DESKTOP"
+            sed -i 's/application\/exe;//g' "$PEAZIP_DESKTOP"
+        fi
     else
         log "CHYBA: Nepodařilo se získat odkaz na PeaZip z GitHubu."
     fi
@@ -1161,23 +1206,25 @@ lxqt_setup_apps_and_defaults() {
         sed -i "s|/home/david|$USER_HOME|g" "$PEAZIP_DEST"
         
         # --- DYNAMICKÉ NASTAVENÍ JAZYKA PEAZIPU ---
-        # Převod systémového kódu na jméno souboru PeaZipu
-        local PEAZIP_LANG=""
-        case "$SYS_LANG_CODE" in
-            cs) PEAZIP_LANG="cz.txt" ;;
-            sk) PEAZIP_LANG="sk.txt" ;;
-            de) PEAZIP_LANG="de.txt" ;;
-            fr) PEAZIP_LANG="fr.txt" ;;
-            es) PEAZIP_LANG="es.txt" ;;
-            pl) PEAZIP_LANG="pl.txt" ;;
-            # Angličtina nebo neznámý jazyk necháme prázdné (PeaZip použije defaultní ENG)
-            *) PEAZIP_LANG="" ;;
+        local PEAZIP_LANG="en.txt" # Nastavíme výchozí jako angličtinu (lepší než prázdno)
+        
+        # Použití hvězdičky (*) chytí i formáty jako cs_CZ nebo de_DE.UTF-8
+        case "${SYS_LANG_CODE,,}" in
+            cs*) PEAZIP_LANG="cz.txt" ;;
+            sk*) PEAZIP_LANG="sk.txt" ;;
+            de*) PEAZIP_LANG="de.txt" ;;
+            fr*) PEAZIP_LANG="fr.txt" ;;
+            es*) PEAZIP_LANG="es.txt" ;;
+            pl*) PEAZIP_LANG="pl.txt" ;;
         esac
         
-        # Najde řádek pod [language] a nahradí ho správným jazykem
-        if grep -q "^\[language\]" "$PEAZIP_DEST"; then
-            sed -i "/^\[language\]/{n;s/.*/$PEAZIP_LANG/}" "$PEAZIP_DEST"
-        fi
+        # Extrémně bezpečné nahrazení přes awk (imunní na \r z Windows)
+        # Najde [language], vytiskne ho, přeskočí na další řádek, 
+        # ten zahodí a místo něj vytiskne náš jazyk. Zbytek souboru nechá být.
+        awk -v lang="$PEAZIP_LANG" '
+            /^\[language\]\r?$/ { print; getline; print lang; next }
+            { print }
+        ' "$PEAZIP_DEST" > "${PEAZIP_DEST}.tmp" && mv "${PEAZIP_DEST}.tmp" "$PEAZIP_DEST"
         # ------------------------------------------
     fi
 }

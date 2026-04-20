@@ -20,6 +20,8 @@ lxqt-suspend.desktop
 lxqt-logout.desktop
 nm-tray.desktop
 yad-icon-browser.desktop
+qps.desktop
+gdebi.desktop
 
 [AUTORUN]
 albert
@@ -54,3 +56,6 @@ nm-connection-editor.desktop
 nm-tray.desktop
 tvurce-zastupcu.desktop
 spravce-zastupcu.desktop
+albert.desktop
+flameshot.desktop
+vim.desktop
