@@ -1452,7 +1452,12 @@ setup_boot() {
 admin_security() {
     log "Aplikuji bezpečnostní profil: $SEC_PROFILE..."
 
-    usermod -aG sudo,audio,video,plugdev,lpadmin,netdev,dialout,cdrom "$REAL_USER"
+    # Až tady na konci máme jistotu, že všechny balíčky (včetně cups) jsou nainstalované
+    for g in sudo audio video plugdev lpadmin netdev dialout cdrom; do
+        if getent group "$g" >/dev/null 2>&1; then
+            usermod -aG "$g" "$REAL_USER" || true
+        fi
+    done
 
     # 1. ÚKLID: Čistý štít (odstranění zbytků, pokud skript běží opakovaně)
     rm -f "/etc/sudoers.d/99_nopasswd_$REAL_USER"
