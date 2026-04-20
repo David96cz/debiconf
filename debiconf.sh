@@ -648,12 +648,22 @@ lxqt_prepare_base_configs() {
 
     # Zamezení možnosti odinstalace
     echo ">> Ukládám seznam neodstranitelných aplikací..."
-    if [ -f "$GLOBAL_CONFIG" ]; then
-        # '|| true' na konci je kritické, aby set -e nezabil skript, když je seznam prázdný
-        sed -n '/^\[UNREMOVAB/,/^\[/p' "$GLOBAL_CONFIG" | grep -v '^\[.*\]' | grep -vE '^\s*#|^\s*$' > /etc/debiconf-unremovable.txt || true
-        chmod 644 /etc/debiconf-unremovable.txt || true
+    
+    # Použití tvé elegantní funkce pro vytažení sekce (taháme z LOCAL_CONFIG pro LXQt!)
+    LOCAL_UNREMOVABLE=$(get_section "$LOCAL_CONFIG" "UNREMOVABLE")
+    
+    if [ -n "$LOCAL_UNREMOVABLE" ]; then
+        # Vezmeme výstup, smažeme Windows znaky (\r) a nahradíme mezery novým řádkem (\n)
+        echo "$LOCAL_UNREMOVABLE" | tr -d '\r' | tr ' ' '\n' > /etc/debiconf-unremovable.txt
+        
+        chmod 644 /etc/debiconf-unremovable.txt
+        echo ">> Obsah uloženého blacklistu:"
+        cat /etc/debiconf-unremovable.txt
     else
-        echo "❌ CHYBA: Konfigurační soubor $GLOBAL_CONFIG nebyl nalezen!"
+        echo ">> Seznam [UNREMOVABLE] je prázdný, soubor nebyl vytvořen."
+        # Vytvoření prázdného souboru pro jistotu, aby systém neřval, že chybí
+        touch /etc/debiconf-unremovable.txt
+        chmod 644 /etc/debiconf-unremovable.txt
     fi
 
     # QTerminal nenápadně stranou
