@@ -1,5 +1,5 @@
 [CORE_PACKAGES]
-plasma-desktop sddm xorg konsole dolphin kio-extras network-manager plasma-nm systemsettings kscreen kmenuedit powerdevil upower plasma-pa bluedevil bluetooth bluez kinfocenter pipewire-audio wireplumber pipewire-pulse plasma-discover kde-spectacle wl-clipboard breeze-gtk-theme kde-config-gtk-style polkit-kde-agent-1 sddm-theme-breeze
+plasma-desktop sddm xorg konsole dolphin kio-extras network-manager plasma-nm systemsettings kscreen kmenuedit powerdevil upower plasma-pa bluedevil bluetooth bluez kinfocenter pipewire-audio wireplumber pipewire-pulse plasma-discover kde-spectacle wl-clipboard breeze-gtk-theme kde-config-gtk-style polkit-kde-agent-1 sddm-theme-breeze gwenview okular xdg-desktop-portal xdg-desktop-portal-kde pipewire wireplumber 
 
 [EXTRA_PACKAGES]
 

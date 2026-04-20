@@ -649,8 +649,9 @@ lxqt_prepare_base_configs() {
     # Zamezení možnosti odinstalace
     echo ">> Ukládám seznam neodstranitelných aplikací..."
     if [ -f "$GLOBAL_CONFIG" ]; then
-        sed -n '/^\[UNREMOVAB/,/^\[/p' "$GLOBAL_CONFIG" | grep -v '^\[.*\]' | grep -vE '^\s*#|^\s*$' > /etc/debiconf-unremovable.txt
-        chmod 644 /etc/debiconf-unremovable.txt
+        # '|| true' na konci je kritické, aby set -e nezabil skript, když je seznam prázdný
+        sed -n '/^\[UNREMOVAB/,/^\[/p' "$GLOBAL_CONFIG" | grep -v '^\[.*\]' | grep -vE '^\s*#|^\s*$' > /etc/debiconf-unremovable.txt || true
+        chmod 644 /etc/debiconf-unremovable.txt || true
     else
         echo "❌ CHYBA: Konfigurační soubor $GLOBAL_CONFIG nebyl nalezen!"
     fi
@@ -1255,6 +1256,8 @@ configure_plasma() {
     else
         sed -i '/^\[org.kde.spectacle.desktop\]/,/^\[/ s/^RectangularRegionScreenShot=.*/RectangularRegionScreenShot=Meta+Shift+S,Meta+Shift+Print,Draw a rectangle to take a screenshot/' "$SHORTCUTS_CONF" || true
     fi
+
+    usermod -aG lpadmin $REAL_USER
 
     run_as_user "lookandfeeltool -a org.kde.plasma.twilight"
     
