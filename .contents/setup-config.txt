@@ -14,4 +14,3 @@ cups-bsd
 system-config-printer
 printer-driver-all
 avahi-daemon
-blueman

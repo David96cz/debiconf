@@ -648,8 +648,12 @@ lxqt_prepare_base_configs() {
 
     # Zamezení možnosti odinstalace
     echo ">> Ukládám seznam neodstranitelných aplikací..."
-    sed -n '/^\[UNREMOVALBE\]/,/^\[/p' "$CONFIG_TXT" | grep -v '^\[.*\]' | grep -vE '^\s*#|^\s*$' > /etc/debiconf-unremovable.txt
-    chmod 644 /etc/debiconf-unremovable.txt
+    if [ -f "$GLOBAL_CONFIG" ]; then
+        sed -n '/^\[UNREMOVAB/,/^\[/p' "$GLOBAL_CONFIG" | grep -v '^\[.*\]' | grep -vE '^\s*#|^\s*$' > /etc/debiconf-unremovable.txt
+        chmod 644 /etc/debiconf-unremovable.txt
+    else
+        echo "❌ CHYBA: Konfigurační soubor $GLOBAL_CONFIG nebyl nalezen!"
+    fi
 
     # QTerminal nenápadně stranou
     local Q_CONF="$USER_HOME/.config/qterminal.org/qterminal.ini"
