@@ -493,8 +493,8 @@ prepare_system() {
     # pokud tam ta stará konfigurace od Debian instalátoru někde uvízla
     # (Tohle vyřeší to, aby sis pamatoval Wi-Fi hned od prvního náběhu)
     if [ -f /etc/wpa_supplicant/wpa_supplicant.conf ]; then
-        nmcli dev wifi connect \$(grep '^ssid=' /etc/wpa_supplicant/wpa_supplicant.conf | cut -d'"' -f2) \
-        password \$(grep '^psk=' /etc/wpa_supplicant/wpa_supplicant.conf | cut -d'"' -f2) >/dev/null 2>&1 || true
+        nmcli dev wifi connect $(grep '^ssid=' /etc/wpa_supplicant/wpa_supplicant.conf | cut -d'"' -f2) \
+        password $(grep '^psk=' /etc/wpa_supplicant/wpa_supplicant.conf | cut -d'"' -f2) >/dev/null 2>&1 || true
     fi
 }
 
