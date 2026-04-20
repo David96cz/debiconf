@@ -37,6 +37,14 @@ init_setup() {
     log "Instalace bude provedena pro uživatele: $REAL_USER"
     sleep 1
 
+    # Detekce stavu hesla ROOT
+    ROOT_HASH=$(awk -F: '$1=="root" {print $2}' /etc/shadow)
+    if [[ "$ROOT_HASH" == "*" || "$ROOT_HASH" == "!" ]]; then
+        ROOT_LOCKED="TRUE" # Uživatel nechal heslo roota při instalaci prázdné
+    else
+        ROOT_LOCKED="FALSE" # Uživatel heslo roota nastavil
+    fi
+
     # HLAVNÍ INTERAKTIVNÍ SMYČKA
     while true; do
         clear
@@ -111,27 +119,49 @@ init_setup() {
         done
 
         echo "--------------------------------------------------"
-        echo "5. Vyžadovat pro sudo výhradně jen heslo ROOT? (Místo uživatelského hesla nastavené při instalaci bude pro administraci vyžadováno heslo ROOT)"
+        echo "5. Zvolte bezpečnostní profil počítače (Správa hesel a oprávnění)"
+        echo ""
+        
+        # Možnost 1 a 2 jsou dostupné vždy
+        echo "1) Rodinný PC / Windows styl (BEZ HESLA)"
+        echo "   - Počítač startuje rovnou na plochu."
+        echo "   - Sudo a instalace programů se provádí tiše nebo jen kliknutím (bez zadávání hesla)."
+        echo "2) Osobní PC (STANDARDNÍ LINUX)"
+        echo "   - Vyžaduje heslo uživatele pro přihlášení i pro sudo/instalace."
+        
+        # Možnost 3 je dostupná JEN pokud si uživatel nastavil heslo roota při instalaci
+        if [ "$ROOT_LOCKED" == "FALSE" ]; then
+            echo "3) Přísný Administrátor (ODDĚLENÁ PRÁVA)"
+            echo "   - Uživatel má své heslo (nebo žádné) pro přihlášení."
+            echo "   - Pro instalaci programů a zásahy do systému je vždy nutné zadat heslo ROOTa."
+        else
+            echo -e "\033[1;30m3) Přísný Administrátor - NEDOSTUPNÉ (Při instalaci Debianu nebylo nastaveno heslo ROOTa)\033[0m"
+        fi
+
         while true; do
-            echo "1) Ano (Sudo bude chtít ROOT heslo)"
-            echo "2) Ne (Ponechat pro sudo klasické heslo uživatele)"
-            read -p "Zadej číslo (1 nebo 2): " ROOT_ANS
-            case "$ROOT_ANS" in
-                1) 
-                    ROOT_ADMIN_ONLY="TRUE"
-                    ROOT_STR="Ano (Sudo na root heslo)"
-                    break 
+            read -p "Zadej číslo profilu (1, 2 nebo 3): " SEC_ANS
+            case "$SEC_ANS" in
+                1)
+                    SEC_PROFILE="FAMILY"
+                    SEC_STR="Rodinný PC (Bez hesel)"
+                    break
                     ;;
-                2) 
-                    ROOT_ADMIN_ONLY="FALSE"
-                    ROOT_STR="Ne (Sudo na uživatele)"
-                    # Rovnou natvrdo zakážeme smazání hesla, jinak by měl sudo bez hesla
-                    REMOVE_PASS="FALSE" 
-                    REMOVE_PASS_STR="Ne (Nutné pro sudo)"
-                    break 
+                2)
+                    SEC_PROFILE="STANDARD"
+                    SEC_STR="Standardní Linux (Uživatelské heslo)"
+                    break
+                    ;;
+                3)
+                    if [ "$ROOT_LOCKED" == "FALSE" ]; then
+                        SEC_PROFILE="ADMIN"
+                        SEC_STR="Přísný Administrátor (Vyžaduje ROOT heslo)"
+                        break
+                    else
+                        echo -e "\033[1;31mTato volba vyžaduje nastavené heslo ROOTa.\033[0m"
+                    fi
                     ;;
                 r|R) continue 2 ;;
-                *) echo -e "\033[1;31mNeplatná volba! Zadej 1, 2 nebo R.\033[0m" ;;
+                *) echo -e "\033[1;31mNeplatná volba!\033[0m" ;;
             esac
         done
 
@@ -1365,23 +1395,56 @@ setup_boot() {
 }
 
 admin_security() {
-    if [ "$ROOT_ADMIN_ONLY" == "TRUE" ]; then
-        log "Zabezpečuji systém: Nastavuji sudo na vyžadování hesla ROOT..."         
-        if grep -q '^root:[!\*]' /etc/shadow; then
-            log "CHYBA: Účet root je zamčen nebo nemá nastavené heslo!"
-            log "Bezpečnostní pojistka: Sudo bude dál chtít heslo uživatele, jinak by se systém zablokoval."
-        else
-            echo 'Defaults rootpw' > /etc/sudoers.d/01-rootpw
-            chmod 0440 /etc/sudoers.d/01-rootpw
-            log "Sudo nyní bezpečně vyžaduje heslo ROOT."
-        fi
-    fi
+    log "Aplikuji bezpečnostní profil: $SEC_PROFILE..."
 
-    if [ "$REMOVE_PASS" == "TRUE" ]; then
-        log "Odstraňuji heslo uživatele '$REAL_USER' pro snadné přihlášení..."
-        passwd -d "$REAL_USER"
-        log "Heslo uživatele bylo odstraněno."
-    fi
+    # 1. ÚKLID: Čistý štít (odstranění zbytků, pokud skript běží opakovaně)
+    rm -f "/etc/sudoers.d/99_nopasswd_$REAL_USER"
+    rm -f /etc/sudoers.d/01-rootpw
+    rm -f /etc/polkit-1/rules.d/49-nopasswd_global.rules
+
+    case "$SEC_PROFILE" in
+        "FAMILY")
+            log "Nastavuji režim Rodinný PC (Bez hesel - Windows UAC style)..."
+            
+            # A) Terminál: Sudo nebude nikdy chtít heslo
+            echo "$REAL_USER ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/99_nopasswd_$REAL_USER"
+            chmod 0440 "/etc/sudoers.d/99_nopasswd_$REAL_USER"
+            
+            # B) GUI (Polkit): Zrušení vyskakovacích oken na heslo pro sudo skupinu
+            mkdir -p /etc/polkit-1/rules.d/
+            echo -e 'polkit.addRule(function(action, subject) {\n    if (subject.isInGroup("sudo")) {\n        return polkit.Result.YES;\n    }\n});' > /etc/polkit-1/rules.d/49-nopasswd_global.rules
+            # C) Odstranění hesla pro rychlé přihlášení
+            passwd -d "$REAL_USER"
+            log "Systém je nyní plně odemčen. Instalace a sudo fungují bez dotazu na heslo."
+            ;;
+
+        "STANDARD")
+            log "Ponechávám standardní linuxové zabezpečení..."
+            # Není třeba nic nastavovat, Debian s tímto počítá v základu
+            log "Sudo i přihlášení vyžadují standardní heslo uživatele."
+            ;;
+
+        "ADMIN")
+            log "Nastavuji přísný režim (Sudo vyžaduje ROOT heslo)..."
+            
+            # Absolutní bezpečnostní pojistka (kdyby náhodou)
+            if grep -q '^root:[!\*]' /etc/shadow; then
+                log "CHYBA: Účet root je zamčen! Bezpečnostní pojistka vrací systém do STANDARD režimu."
+            else
+                # Sudo přesměrováno na heslo roota
+                echo 'Defaults rootpw' > /etc/sudoers.d/01-rootpw
+                chmod 0440 /etc/sudoers.d/01-rootpw
+                log "Sudo nyní bezpečně vyžaduje heslo ROOT."
+                
+                # Umožnění vymazání hesla uživatele, pokud si to v menu zvolil
+                if [ "$REMOVE_PASS" == "TRUE" ]; then
+                    log "Odstraňuji heslo uživatele '$REAL_USER' pro snadné přihlášení..."
+                    passwd -d "$REAL_USER"
+                    log "Heslo uživatele odstraněno. Administraci kryje ROOT."
+                fi
+            fi
+            ;;
+    esac
 }
 
 hardware_detection() {

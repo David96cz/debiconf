@@ -39,12 +39,10 @@ class PasswordChanger(QWidget):
 
         layout.addLayout(form_layout)
 
-        # CHECKBOX: Zobrazit nová hesla
         self.cb_show_pass = QCheckBox('Zobrazit nová hesla')
         self.cb_show_pass.stateChanged.connect(self.toggle_echo_mode)
         layout.addWidget(self.cb_show_pass)
 
-        # CHECKBOX: Autologin (LightDM)
         self.cb_autologin = QCheckBox('Automatické přihlášení (při startu nechce heslo)')
         if os.path.exists(self.autologin_conf):
             self.cb_autologin.setChecked(True)
@@ -70,34 +68,11 @@ class PasswordChanger(QWidget):
 
     def toggle_autologin(self, state):
         conf_dir = "/etc/lightdm/lightdm.conf.d"
+        
         if state == Qt.Checked:
-            # ZAPNUTÍ: Použijeme lxqt-sudo pro jistotu zápisu
-            cmd = f"mkdir -p {conf_dir} && echo -e '[Seat:*]\\nautologin-user={self.user_name}\\nautologin-user-timeout=0' > {self.autologin_conf}"
+            cmd = f"mkdir -p {conf_dir} && echo -e '[Seat:*]\nautologin-user={self.user_name}\nautologin-user-timeout=0' > {self.autologin_conf}"
             try:
                 subprocess.run(['lxqt-sudo', 'bash', '-c', cmd], check=True)
-                QMessageBox.information(self, "Hotovo", "Automatické přihlášení zapnuto.")
-            except:
-                self.cb_autologin.setChecked(False)
-        else:
-            # VYPNUTÍ: Stačí soubor vyprázdnit
-            try:
-                subprocess.run(['lxqt-sudo', 'bash', '-c', f"> {self.autologin_conf}"], check=True)
-                QMessageBox.information(self, "Hotovo", "Automatické přihlášení vypnuto.")
-            except:
-                self.cb_autologin.setChecked(True)
-        conf_dir = "/etc/lightdm/lightdm.conf.d"
-        
-        # Pojistka: Pokud adresář neexistuje, vytvoříme ho (potřeba sudo)
-        if state == Qt.Checked and not os.path.exists(conf_dir):
-            try:
-                subprocess.run(['sudo', 'mkdir', '-p', conf_dir], check=True)
-            except: pass
-
-        if state == Qt.Checked:
-            # ZAPNUTÍ: Přepíšeme obsah souboru (použijeme tee, Polkit to pustí)
-            cmd = f"echo -e '[Seat:*]\nautologin-user={self.user_name}\nautologin-user-timeout=0' | sudo tee {self.autologin_conf}"
-            try:
-                subprocess.run(cmd, shell=True, check=True, stdout=subprocess.DEVNULL)
                 QMessageBox.information(self, "Nastavení přihlášení", "Automatické přihlášení bylo ZAPNUTO.\nPočítač půjde po startu rovnou na plochu.")
             except Exception as e:
                 QMessageBox.critical(self, "Chyba", f"Nepodařilo se zapnout automatické přihlášení.\n{e}")
@@ -105,10 +80,8 @@ class PasswordChanger(QWidget):
                 self.cb_autologin.setChecked(False)
                 self.cb_autologin.blockSignals(False)
         else:
-            # VYPNUTÍ: Nesmažeme soubor, jen ho "vynulujeme" (prázdný soubor = žádný autologin)
-            cmd = f"true | sudo tee {self.autologin_conf}"
             try:
-                subprocess.run(cmd, shell=True, check=True, stdout=subprocess.DEVNULL)
+                subprocess.run(['lxqt-sudo', 'rm', '-f', self.autologin_conf], check=True)
                 QMessageBox.information(self, "Nastavení přihlášení", "Automatické přihlášení bylo VYPNUTO.\nPři startu bude vyžadováno heslo.")
             except Exception as e:
                 QMessageBox.critical(self, "Chyba", f"Nepodařilo se vypnout automatické přihlášení.\n{e}")
@@ -120,7 +93,6 @@ class PasswordChanger(QWidget):
         try:
             child = pexpect.spawn('env LANG=C passwd')
             idx = child.expect(['Current password:', 'New password:', pexpect.EOF], timeout=3)
-            
             if idx == 0:
                 if not old_p:
                     child.close()
@@ -155,22 +127,19 @@ class PasswordChanger(QWidget):
             reply = QMessageBox.question(self, 'Varování', 
                 "Opravdu chcete ZRUŠIT heslo? Počítač bude nezabezpečený a při přihlášení či instalaci programů nebudete zadávat heslo.",
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-            
             if reply == QMessageBox.Yes:
                 try:
-                    subprocess.run(['sudo', 'passwd', '-d', self.user_name], check=True)
+                    subprocess.run(['lxqt-sudo', 'passwd', '-d', self.user_name], check=True)
                     QMessageBox.information(self, "Hotovo", "Heslo bylo úspěšně odstraněno.")
-                    # self.close() odstraněno
                 except:
                     QMessageBox.critical(self, "Chyba", "Nepodařilo se smazat heslo.")
             return
-        try:
-            process = subprocess.Popen(['sudo', '/usr/sbin/chpasswd'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            out, err = process.communicate(input=f"{self.user_name}:{new_p}\n")
             
+        try:
+            process = subprocess.Popen(['lxqt-sudo', '/usr/sbin/chpasswd'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            out, err = process.communicate(input=f"{self.user_name}:{new_p}\n")
             if process.returncode == 0:
                 QMessageBox.information(self, "Úspěch", "Vaše nové heslo bylo úspěšně nastaveno.")
-                # self.close() odstraněno
             else:
                 QMessageBox.warning(self, "Chyba Systému", f"Systém odmítl heslo nastavit.\n\nTechnický důvod:\n{err}")
         except Exception as e:
