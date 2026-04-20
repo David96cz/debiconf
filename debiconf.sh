@@ -462,15 +462,31 @@ lxqt_setup_apps_and_defaults() {
 prepare_system() {
     log "Základní příprava systému a sítě..."
     apt-get update -qq
-    # Přidán plymouth a plymouth-themes
     apt-get install -y sudo curl wget dpkg-dev git dbus-x11 numlockx plymouth plymouth-themes
     
     usermod -aG sudo,audio,video,plugdev,lpadmin,netdev,dialout,cdrom "$REAL_USER" || true
 
+    # Likvidace starého síťového mozku
     apt-get purge -y ifupdown || true
     rm -rf /etc/network/interfaces.d/* || true
-    
     printf "auto lo\niface lo inet loopback\n" > /etc/network/interfaces
+
+    # -------------------------------------------------------------
+    # OPRAVA WI-FI: Vynucení nadvlády NetworkManageru
+    # -------------------------------------------------------------
+    # Tohle zajistí, že NetworkManager převezme kontrolu i nad sítěmi z instalace
+    if [ -f /etc/NetworkManager/NetworkManager.conf ]; then
+        sed -i 's/managed=false/managed=true/g' /etc/NetworkManager/NetworkManager.conf
+        systemctl restart NetworkManager || true
+    fi
+
+    # Zkopírujeme hesla k Wi-Fi z instalace přímo pod křídla NetworkManageru,
+    # pokud tam ta stará konfigurace od Debian instalátoru někde uvízla
+    # (Tohle vyřeší to, aby sis pamatoval Wi-Fi hned od prvního náběhu)
+    if [ -f /etc/wpa_supplicant/wpa_supplicant.conf ]; then
+        nmcli dev wifi connect \$(grep '^ssid=' /etc/wpa_supplicant/wpa_supplicant.conf | cut -d'"' -f2) \
+        password \$(grep '^psk=' /etc/wpa_supplicant/wpa_supplicant.conf | cut -d'"' -f2) >/dev/null 2>&1 || true
+    fi
 }
 
 # === 2. INSTALACE BALÍČKŮ A PROHLÍŽEČŮ ===
@@ -501,7 +517,8 @@ install_packages() {
                     apt-get install -y chromium chromium-l10n || true
                 fi
             else
-                wget -qO /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt-get install -y /tmp/chrome.deb || true 
+                log "Stahuji Google Chrome..."
+                wget -q --show-progress -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt-get install -y /tmp/chrome.deb || true 
             fi
             ;;
         2) 
@@ -540,9 +557,11 @@ install_packages() {
             if command -v desktopeditors &> /dev/null; then
                 log "OnlyOffice je již nainstalován, přeskakuji..."
             elif [ "$SYS_ARCH" == "arm64" ]; then
-                wget -qO /tmp/onlyoffice.deb https://download.onlyoffice.com/install/desktop/editors/linux/onlyoffice-desktopeditors_arm64.deb && apt-get install -y /tmp/onlyoffice.deb || true
+                log "Stahuji OnlyOffice (ARM64)..."
+                wget -q --show-progress -O /tmp/onlyoffice.deb https://download.onlyoffice.com/install/desktop/editors/linux/onlyoffice-desktopeditors_arm64.deb && apt-get install -y /tmp/onlyoffice.deb || true
             else
-                wget -qO /tmp/onlyoffice.deb https://download.onlyoffice.com/install/desktop/editors/linux/onlyoffice-desktopeditors_amd64.deb && apt-get install -y /tmp/onlyoffice.deb || true
+                log "Stahuji OnlyOffice (AMD64)..."
+                wget -q --show-progress -O /tmp/onlyoffice.deb https://download.onlyoffice.com/install/desktop/editors/linux/onlyoffice-desktopeditors_amd64.deb && apt-get install -y /tmp/onlyoffice.deb || true
             fi
             ;;
     esac
@@ -556,45 +575,38 @@ install_packages() {
             log "Povoluji 32bitovou architekturu (i386)..."
             dpkg --add-architecture i386 || true
             
-            log "Přidávám oficiální WineHQ repozitář (bezpečně pro tuto verzi Debianu)..."
+            log "Přidávám oficiální WineHQ repozitář..."
             mkdir -p /etc/apt/keyrings
-            wget -O /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key || true
+            wget -q --show-progress -O /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key || true
             
-            # Dynamické načtení kódového jména (např. trixie), aby nedošlo k přidání cizích repozitářů
             source /etc/os-release
-            wget -NP /etc/apt/sources.list.d/ "https://dl.winehq.org/wine-builds/debian/dists/${VERSION_CODENAME}/winehq-${VERSION_CODENAME}.sources" || true
+            wget -q --show-progress -NP /etc/apt/sources.list.d/ "https://dl.winehq.org/wine-builds/debian/dists/${VERSION_CODENAME}/winehq-${VERSION_CODENAME}.sources" || true
             
             apt-get update -qq || true
             
+            # PŘIDÁNO xvfb a cabextract (absolutní nutnost pro winetricks na pozadí)
             log "Instaluji nejnovější verzi WineHQ Stable..."
-            apt-get install -y --install-recommends winehq-stable fonts-wine || true
+            apt-get install -y --install-recommends winehq-stable fonts-wine xvfb cabextract || true
             
-            log "Stahuji absolutně nejnovější Winetricks přímo z GitHubu..."
-            wget -qO /usr/local/bin/winetricks https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks || true
+            log "Stahuji absolutně nejnovější Winetricks..."
+            wget -q --show-progress -O /usr/local/bin/winetricks https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks || true
             chmod +x /usr/local/bin/winetricks || true
 
-            # --- OKAMŽITÁ INICIALIZACE WINE A INSTALACE MONO ---
-            log "Inicializuji Wine profil potichu a ihned stahuji .NET Mono..."
-            # 1. Vytvoří čistý profil bez otravných vyskakovacích oken
-            su - "$REAL_USER" -c "WINEDLLOVERRIDES=mscoree,mshtml= wineboot -u" || true
-            # 2. Okamžitě stáhne a nainstaluje Mono, dokud má instalátor spolehlivě přístup k síti
-            su - "$REAL_USER" -c "winetricks -q mono" || true
+            log "Inicializuji Wine profil a instaluji Mono na falešném monitoru (čekejte)..."
+            # Používáme xvfb-run, aby si Wine myslel, že má grafické rozhraní, jinak Mono spadne!
+            su - "$REAL_USER" -c "xvfb-run -a env WINEDLLOVERRIDES=mscoree,mshtml= wineboot -u" || true
+            su - "$REAL_USER" -c "xvfb-run -a winetricks -q mono" || true
 
             # --- SYSTÉMOVÉ POJIŠTĚNÍ WINE ---
             log "Aktivuji jádrovou podporu pro .exe a čistím cache..."
+            apt install -y binfmt-support wine-binfmt icoextract icoextract-thumbnailer || true
             
-            # Očištěno od duplicit - instaluje se jen jednou
-            apt-get install -y binfmt-support wine-binfmt icoextract icoextract-thumbnailer || true
-            
-            # Zápis do jádra
             /usr/sbin/update-binfmts --enable wine || true
             systemctl restart systemd-binfmt || true
             
-            # Propojení MIME (aby systém věděl, že má použít ten vygenerovaný wine.desktop)
             su - "$REAL_USER" -c "xdg-mime default wine.desktop application/x-ms-dos-executable" || true
             su - "$REAL_USER" -c "update-desktop-database ~/.local/share/applications" || true
             
-            # Vymazání cache, aby se ty ikony exáčů hned načetly
             rm -rf "$USER_HOME/.cache/thumbnails/*" || true
         fi
     fi
