@@ -58,8 +58,9 @@ def parse_desktop_file(filepath):
 class ShortcutApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Správce Zástupců (Debiconf LXQt)")
+        self.setWindowTitle("Správce Zástupců")
         self.resize(850, 600)
+        self.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
         self.editing_path = None # Uchovává cestu k právě editovanému souboru
         
         main_widget = QWidget()
