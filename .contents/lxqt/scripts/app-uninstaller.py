@@ -159,17 +159,26 @@ class AppUninstaller(QWidget):
                 current_key = None
                 for line in lines:
                     line = line.strip()
-                    if line.startswith("[Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\"):
-                        current_key = line.split("\\\\")[-1].strip("]")
+                    
+                    # HLAVNÍ OPRAVA: Hledáme '\Uninstall\' kdekoli v klíči. 
+                    # Tím chytneme 64bit i 32bit (Wow6432Node) hry!
+                    if line.startswith("[") and "\\Uninstall\\" in line:
+                        current_key = line.split("\\")[-1].strip("]")
                     elif line.startswith("["):
                         current_key = None
                     elif current_key and line.startswith('"DisplayName"='):
                         app_name = line.split("=", 1)[1].strip('"')
-                        # Odfiltrujeme systémový Wine balast, aby tam nebylo Mono a Gecko
+                        # Odfiltrujeme systémový Wine balast
                         if "Wine" not in app_name and "Gecko" not in app_name and "Mono" not in app_name:
                             wine_apps[app_name] = current_key
             except Exception:
                 pass
+
+        # Naplnění do hlavní tabulky pro vykreslení
+        for app_name, app_uuid in wine_apps.items():
+            display_name = f"{app_name} (Windows Program)"
+            if display_name not in apps_data:
+                apps_data[display_name] = {"filepath": app_uuid, "filename": "wine_app", "icon": "wine", "is_wine": True}
 
         # Naplnění do hlavní tabulky pro vykreslení
         for app_name, app_uuid in wine_apps.items():
