@@ -2,15 +2,15 @@
 import sys
 import os
 import subprocess
-from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, 
+from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QLineEdit, QPushButton, QMessageBox, QListWidget, 
                              QListWidgetItem, QLabel)
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon
 
-# --- VLÁKNO PRO ODINSTALACI NA POZADÍ (Aby GUI nezamrzlo) ---
+# --- VLÁKNO PRO ODINSTALACI NA POZADÍ ---
 class UninstallWorker(QThread):
-    finished = pyqtSignal(int, str, str, str) # returncode, filepath, app_name, filename
+    finished = pyqtSignal(int, str, str, str)
 
     def __init__(self, filepath, app_name, filename):
         super().__init__()
@@ -19,7 +19,6 @@ class UninstallWorker(QThread):
         self.filename = filename
 
     def run(self):
-        # 1. Zjistíme, jestli je to systémový APT balíček
         if self.filepath.startswith("/usr/share/applications"):
             dpkg_result = subprocess.run(["dpkg", "-S", self.filepath], capture_output=True, text=True)
             if dpkg_result.returncode == 0:
@@ -28,10 +27,8 @@ class UninstallWorker(QThread):
                 result = subprocess.run(["lxqt-sudo", "bash", "-c", cmd])
                 self.finished.emit(result.returncode, self.filepath, self.app_name, self.filename)
             else:
-                # Není v APT databázi, smažeme aspoň zástupce
                 self.remove_local()
         else:
-            # Lokální zástupce
             self.remove_local()
 
     def remove_local(self):
@@ -60,7 +57,7 @@ class AppUninstaller(QWidget):
 
     def initUI(self):
         self.setWindowTitle('Odinstalovat programy')
-        self.setFixedSize(550, 600)
+        self.setFixedSize(550, 650) # Zvětšeno pro nové tlačítko
         self.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
         
         self.setStyleSheet("""
@@ -73,23 +70,24 @@ class AppUninstaller(QWidget):
             QListWidget::item:hover { background-color: #e3f2fd; }
             QListWidget::item:selected { background-color: #2a7fca; color: white; border-radius: 3px; }
             
-            /* TLAČÍTKO - STANDARDNÍ STAV */
             QPushButton#btnUninstall {
                 background-color: #d32f2f; color: white; padding: 15px; font-weight: bold; border-radius: 5px; font-size: 12pt;
             }
             QPushButton#btnUninstall:hover { background-color: #b71c1c; }
+            QPushButton#btnUninstall:disabled { background-color: #9e9e9e; color: #e0e0e0; }
             
-            /* TLAČÍTKO - ZABLOKOVANÝ STAV (ŠEDÉ) */
-            QPushButton#btnUninstall:disabled {
-                background-color: #9e9e9e; color: #e0e0e0;
+            /* Tlačítko pro WINE */
+            QPushButton#btnWine {
+                background-color: #7b1fa2; color: white; padding: 12px; font-weight: bold; border-radius: 5px; font-size: 11pt; margin-top: 10px;
             }
+            QPushButton#btnWine:hover { background-color: #4a148c; }
         """)
 
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
         
-        lbl_info = QLabel("<b>Správce aplikací</b><br>Vyberte program, který chcete trvale odstranit.")
+        lbl_info = QLabel("<b>Správce aplikací (Linux)</b><br>Vyberte linuxový program pro trvalé odstranění.")
         lbl_info.setStyleSheet("font-size: 12pt;")
         layout.addWidget(lbl_info)
 
@@ -103,11 +101,18 @@ class AppUninstaller(QWidget):
         self.app_list.setStyleSheet("font-size: 12pt;")
         layout.addWidget(self.app_list)
         
-        self.btn_uninstall = QPushButton('Odinstalovat vybranou aplikaci')
-        self.btn_uninstall.setObjectName("btnUninstall") # Pro CSS
+        self.btn_uninstall = QPushButton('Odinstalovat vybranou linuxovou aplikaci')
+        self.btn_uninstall.setObjectName("btnUninstall")
         self.btn_uninstall.setCursor(Qt.PointingHandCursor)
         self.btn_uninstall.clicked.connect(self.handle_uninstall)
         layout.addWidget(self.btn_uninstall)
+        
+        # --- NOVÉ TLAČÍTKO PRO WINE ---
+        self.btn_wine = QPushButton('Odinstalovat Windows hry a programy (Wine)')
+        self.btn_wine.setObjectName("btnWine")
+        self.btn_wine.setCursor(Qt.PointingHandCursor)
+        self.btn_wine.clicked.connect(self.run_wine_uninstaller)
+        layout.addWidget(self.btn_wine)
         
         self.setLayout(layout)
 
@@ -138,7 +143,8 @@ class AppUninstaller(QWidget):
                     with open(filepath, 'r', errors='ignore') as f:
                         content = f.read()
                         
-                    if "NoDisplay=true" in content:
+                    # IGNOROVÁNÍ SKRYTÝCH A CUSTOM ZÁSTUPCŮ (Z Generátoru)
+                    if "NoDisplay=true" in content or "X-Debiconf-Custom=true" in content:
                         continue
                         
                     temp_name = ""
@@ -179,40 +185,22 @@ class AppUninstaller(QWidget):
             item = QListWidgetItem(name)
             
             icon_str = item_data["icon"]
-            
-            # --- CHYTRÁ DETEKCE IKON ---
             icon = QIcon()
             
-            # 1. Je to absolutní cesta k souboru? (Např. tvůj Správce zástupců)
             if os.path.isabs(icon_str) and os.path.exists(icon_str):
                 icon = QIcon(icon_str)
             else:
-                # 2. Ořízneme koncovku JEN pokud tam opravdu je obrázková, 
-                # jinak rozbijeme názvy jako "org.flameshot.Flameshot"
-                if icon_str.lower().endswith(('.png', '.svg', '.xpm', '.ico')):
-                    icon_base = icon_str.rsplit('.', 1)[0]
-                else:
-                    icon_base = icon_str
-                
-                # 3. Hledáme přes motivy (Díky spodnímu nastavení to projede Papirus i hicolor)
+                icon_base = icon_str.rsplit('.', 1)[0] if icon_str.lower().endswith(('.png', '.svg', '.xpm', '.ico')) else icon_str
                 icon = QIcon.fromTheme(icon_base)
                 
-                # 4. TVRDÝ FALLBACK NA DISK: Když motivy selžou
                 if icon.isNull():
-                    fallback_paths = [
-                        f"/usr/share/pixmaps/{icon_base}.png",
-                        f"/usr/share/pixmaps/{icon_base}.svg",
-                        f"{os.path.expanduser('~')}/.local/share/icons/{icon_base}.png",
-                        f"{os.path.expanduser('~')}/.local/share/icons/{icon_base}.svg"
-                    ]
-                    for path in fallback_paths:
+                    for path in [f"/usr/share/pixmaps/{icon_base}.png", f"/usr/share/pixmaps/{icon_base}.svg",
+                                 f"{os.path.expanduser('~')}/.local/share/icons/{icon_base}.png", f"{os.path.expanduser('~')}/.local/share/icons/{icon_base}.svg"]:
                         if os.path.exists(path):
                             icon = QIcon(path)
                             break
                             
-                # 5. Úplně poslední záchrana (ozubené kolo)
-                if icon.isNull():
-                    icon = QIcon.fromTheme("application-x-executable")
+                if icon.isNull(): icon = QIcon.fromTheme("application-x-executable")
                     
             item.setIcon(icon)
             item.setData(Qt.UserRole, item_data["filepath"])
@@ -238,24 +226,20 @@ class AppUninstaller(QWidget):
                                      f"Opravdu chcete trvale odstranit program <b>{self.app_name}</b>?",
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
                                      
-        if reply != QMessageBox.Yes:
-            return
+        if reply != QMessageBox.Yes: return
 
-        # --- ZMĚNA STAVU UI (ZAŠEDNUTÍ A TOČÍCÍ KOLEČKO) ---
         self.btn_uninstall.setEnabled(False)
         self.btn_uninstall.setText("Probíhá odinstalace...")
-        self.app_list.setEnabled(False) # Zamezí klikání do seznamu během procesu
+        self.app_list.setEnabled(False)
         current_item.setText(f"{self.app_name}  (Zpracovávám...)")
 
-        # Spuštění vlákna
         self.worker = UninstallWorker(filepath, self.app_name, filename)
         self.worker.finished.connect(self.on_uninstall_finished)
         self.worker.start()
 
     def on_uninstall_finished(self, returncode, filepath, app_name, filename):
-        # --- OBNOVENÍ STAVU UI ---
         self.btn_uninstall.setEnabled(True)
-        self.btn_uninstall.setText('Odinstalovat vybranou aplikaci')
+        self.btn_uninstall.setText('Odinstalovat vybranou linuxovou aplikaci')
         self.app_list.setEnabled(True)
 
         if returncode == 0:
@@ -265,7 +249,6 @@ class AppUninstaller(QWidget):
             self.search_bar.clear()
         else:
             QMessageBox.warning(self, "Zrušeno", "Odinstalace byla zrušena nebo se nezdařila.")
-            # Pokud se to zrušilo (třeba teta nezadala heslo), vrátíme název zpět
             self.load_apps()
 
     def post_uninstall_cleanup(self, filename):
@@ -275,14 +258,18 @@ class AppUninstaller(QWidget):
             except: pass
         subprocess.run(["update-desktop-database", os.path.expanduser("~/.local/share/applications")], capture_output=True)
 
+    # --- SPUŠTĚNÍ NATIVNÍHO WINE ODINSTALÁTORU ---
+    def run_wine_uninstaller(self):
+        try:
+            # Pustíme wine uninstaller jako proces na pozadí, ať to nezasekne Python okno
+            subprocess.Popen(["wine", "uninstaller"])
+        except Exception as e:
+            QMessageBox.critical(self, "Chyba", f"Nepodařilo se spustit Wine uninstaller.\n{str(e)}")
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    
-    # 1. Preferujeme krásný Papirus
     QIcon.setThemeName("Papirus")
-    # 2. Když v něm ikona chybí (Flameshot, CopyQ), skočíme do základního linuxového motivu
     QIcon.setFallbackThemeName("hicolor")
-    
     window = AppUninstaller()
     window.show()
     sys.exit(app.exec_())
