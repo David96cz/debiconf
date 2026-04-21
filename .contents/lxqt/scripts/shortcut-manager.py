@@ -401,6 +401,60 @@ class ShortcutApp(QMainWindow):
     def create_shortcut(self):
         name, exec_path = self.name_input.text().strip(), self.exec_input.text().strip()
         if not name or not exec_path: return
+        
+        # --- ZÁCHRANA PRO HRY: Zjištění pracovní složky (Path) ---
+        working_dir = ""
+        clean_exec = exec_path.strip('"\'') # Odstranění případných uvozovek
+        if os.path.isabs(clean_exec):
+            working_dir = os.path.dirname(clean_exec)
+        elif " " in clean_exec and os.path.isabs(clean_exec.split(" ")[0]):
+             # Pokud jsou tam argumenty, vezmeme jen složku ze samotné cesty
+             working_dir = os.path.dirname(clean_exec.split(" ")[0])
+
+        final_exec = f"wine \"{exec_path}\"" if exec_path.lower().endswith('.exe') else exec_path
+        if self.wrapper_cb.isChecked(): final_exec = f"python3 \"{BUSY_SCRIPT}\" {final_exec}"
+        
+        # Rozhodnutí, jestli přepisujeme starý nebo děláme nový
+        if hasattr(self, 'editing_path') and self.editing_path:
+            output_file = self.editing_path
+        else:
+            safe_name = "".join([c for c in name if c.isalnum() or c==' ']).replace(' ', '-').lower()
+            output_file = os.path.join(APPS_DIR, f"{safe_name}.desktop")
+
+        try:
+            if not os.path.exists(APPS_DIR): os.makedirs(APPS_DIR)
+            with open(output_file, 'w') as f:
+                f.write("[Desktop Entry]\n")
+                f.write("X-Debiconf-Custom=true\n")
+                f.write("Type=Application\n")
+                f.write(f"Name={name}\n")
+                f.write(f"Exec={final_exec}\n")
+                
+                # Pokud jsme našli složku, zapíšeme ji, aby hry nepadaly
+                if working_dir:
+                    f.write(f"Path={working_dir}\n")
+                    
+                f.write(f"Icon={self.icon_input.text() or 'applications-other'}\n")
+                f.write(f"Terminal={'true' if self.terminal_cb.isChecked() else 'false'}\n")
+                f.write(f"Categories={self.category_input.currentData()};\n")
+                
+            os.chmod(output_file, 0o755)
+            self.load_applications()
+            self.refresh_system_menu()
+            
+            msg = "Zástupce úspěšně aktualizován!" if hasattr(self, 'editing_path') and self.editing_path else "Zástupce úspěšně vytvořen!"
+            QMessageBox.information(self, "OK", msg)
+            
+            # Reset formu a edit modu
+            self.editing_path = None
+            self.create_btn.setText("Vytvořit zástupce v Menu")
+            self.name_input.clear()
+            self.exec_input.clear()
+            self.icon_input.clear()
+            
+        except Exception as e: QMessageBox.critical(self, "Chyba", str(e))
+        name, exec_path = self.name_input.text().strip(), self.exec_input.text().strip()
+        if not name or not exec_path: return
         final_exec = f"wine \"{exec_path}\"" if exec_path.lower().endswith('.exe') else exec_path
         if self.wrapper_cb.isChecked(): final_exec = f"python3 \"{BUSY_SCRIPT}\" {final_exec}"
         
