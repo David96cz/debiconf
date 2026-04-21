@@ -3,7 +3,7 @@ WINDOW_MANAGER=XFWM
 THEME=LUBUNTU-ARC
 
 [CORE_PACKAGES]
-lxqt-core lightdm pcmanfm-qt qterminal arc-theme papirus-icon-theme network-manager-gnome nm-tray breeze pulseaudio pavucontrol-qt alsa-utils gvfs gvfs-backends gvfs-fuse lxqt-powermanagement udisks2 lxqt-policykit lxqt-config lxqt-sudo blueman lxappearance qttranslations5-l10n qt6-translations-l10n pcmanfm-qt-l10n qterminal-l10n libfm-qt-l10n pavucontrol-qt-l10n lxqt-powermanagement-l10n lxqt-policykit-l10n lxqt-config-l10n lxqt-sudo-l10n lxqt-panel-l10n lxqt-session-l10n lxqt-runner-l10n lxqt-globalkeys-l10n lxqt-notificationd-l10n udiskie wmctrl inotify-tools
+lxqt-core lightdm pcmanfm-qt qterminal arc-theme papirus-icon-theme network-manager-gnome nm-tray nm-tray-l10n breeze pulseaudio pavucontrol-qt alsa-utils gvfs gvfs-backends gvfs-fuse lxqt-powermanagement udisks2 lxqt-policykit lxqt-config lxqt-sudo blueman lxappearance qttranslations5-l10n qt6-translations-l10n pcmanfm-qt-l10n qterminal-l10n libfm-qt-l10n pavucontrol-qt-l10n lxqt-powermanagement-l10n lxqt-policykit-l10n lxqt-config-l10n lxqt-sudo-l10n lxqt-panel-l10n lxqt-session-l10n lxqt-runner-l10n lxqt-globalkeys-l10n lxqt-notificationd-l10n udiskie wmctrl inotify-tools
 
 [EXTRA_PACKAGES]
 xfwm4 xfconf gdebi icoutils viewnior ffmpegthumbnailer gthumb cabextract yad brightnessctl libnotify-bin flameshot copyq python3-pyqt5 python3-pexpect
