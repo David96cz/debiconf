@@ -613,14 +613,15 @@ LXQtFancyMenuWindow {
     color: #D2D8E0;
 }
 
-/* Vynuceni BILE barvy pro ikony a text na panelu pri zapnutem obarvovani */
-LXQtPanel * {
+/* Vynuceni BILE barvy PRO PANEL, ale NE pro okno nastaveni */
+LXQtPanel {
     color: #FFFFFF;
-    qproperty-iconColor: #FFFFFF;
 }
 
-/* Agresivni vynuceni bile barvy pro vsechny moduly panelu */
-LXQtPanel, LXQtPanel *, Plugin, LXQtPanelPlugin, LXQtTrayPlugin, #TrayIcon, QToolButton, QLabel {
+/* Obarvi jen samotne pluginy a jejich tlacitka, ne globalni okna a texty */
+Plugin, LXQtPanelPlugin, LXQtTrayPlugin, #TrayIcon, 
+Plugin > QToolButton, Plugin > QWidget > QToolButton, 
+Plugin > QLabel, Plugin > QWidget > QLabel {
     color: #FFFFFF;
     qproperty-iconColor: #FFFFFF;
 }

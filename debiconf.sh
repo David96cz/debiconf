@@ -957,7 +957,7 @@ lxqt_setup_appearance() {
     # --- NOVÁ ČÁST: NASAZENÍ VLASTNÍCH IKON A KONFIGURACÍ ---
 
     # A) Extrakce vlastního balíčku ikon (Papirus-Custom)
-    local ICON_ARCHIVE="$CONTENTS_DIR/icons/Papirus-Custom.tar.gz"
+    local ICON_ARCHIVE="$CONTENTS_DIR/lxqt/icons/Papirus-Custom.tar.gz"
     if [ -f "$ICON_ARCHIVE" ]; then
         log "Nasazuji vlastní ikony Papirus-Custom (obsahuje fixy pro Blueman a CopyQ)..."
         mkdir -p /usr/share/icons
@@ -1053,7 +1053,7 @@ lxqt_setup_appearance() {
         [ -f "$SESSION_CONF" ] && [ -n "$B_EXEC" ] && sed -i "s/^BROWSER=.*/BROWSER=$B_EXEC/" "$SESSION_CONF" || true
 
         # Definice názvu zástupce pro vyhledávání (uprav podle reality)
-        local SEARCH_DESKTOP="$LOCAL_APPS/hledat.desktop"
+        local SEARCH_DESKTOP="$LOCAL_APPS/albert-search.desktop"
 
         # Vymazání starých zástupců
         sed -i '/^apps\\/d' "$PANEL_CONF" || true
