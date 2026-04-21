@@ -715,29 +715,6 @@ lxqt_prepare_base_configs() {
         echo "[General]" > "$LXQT_CONF"
     fi
 
-    # 1. Vymazání všech starých sraček, aby to nedělalo chameleona (Smaže i vlastní palety z předchozích motivů)
-    sed -i '/^theme=/d' "$LXQT_CONF" || true
-    sed -i '/^icon_theme=/d' "$LXQT_CONF" || true
-    sed -i '/^style=/d' "$LXQT_CONF" || true
-    sed -i '/^customPalette=/d' "$LXQT_CONF" || true
-    sed -i '/^ask_before_logout=/d' "$LXQT_CONF" || true
-
-    # 2. Zápis PANELU a ODHLÁŠENÍ (Do sekce General)
-    sed -i "/^\[General\]/a theme=Lubuntu Arc" "$LXQT_CONF"
-    sed -i "/^\[General\]/a ask_before_logout=$CONF_OUT" "$LXQT_CONF"
-    
-    # 3. Zápis IKON
-    # Lubuntu používá standardní Papirus. Pokud chceš ikony do panelu o něco svítivější, můžeš zkusit Papirus-Dark
-    sed -i "/^\[General\]/a icon_theme=Papirus" "$LXQT_CONF"
-
-    # 4. Zápis SVĚTLÝCH OKEN (Vytvoří/najde sekci Qt a zakáže míchání barev)
-    if ! grep -q "^\[Qt\]" "$LXQT_CONF"; then
-        echo "" >> "$LXQT_CONF"
-        echo "[Qt]" >> "$LXQT_CONF"
-    fi
-    sed -i "/^\[Qt\]/a style=Breeze" "$LXQT_CONF"
-    sed -i "/^\[Qt\]/a customPalette=false" "$LXQT_CONF"
-
     # 5. Jazyk
     if grep -q "^language=" "$LXQT_CONF"; then
         sed -i "s/^language=.*/language=$SYS_LANG_CODE/" "$LXQT_CONF" || true
@@ -908,6 +885,57 @@ lxqt_setup_appearance() {
     if [ -d "$ICONS_SRC" ]; then
         cp -r "$ICONS_SRC" "$USER_HOME/.local/share/" 2>/dev/null || true
     fi
+
+    # --- NOVÁ ČÁST: NASAZENÍ VLASTNÍCH IKON A KONFIGURACÍ ---
+
+    # A) Extrakce vlastního balíčku ikon (Papirus-Custom)
+    local ICON_ARCHIVE="$CONTENTS_DIR/icons/Papirus-Custom.tar.gz"
+    if [ -f "$ICON_ARCHIVE" ]; then
+        log "Nasazuji vlastní ikony Papirus-Custom (obsahuje fixy pro Blueman a CopyQ)..."
+        mkdir -p /usr/share/icons
+        tar -xzf "$ICON_ARCHIVE" -C /usr/share/icons/ || true
+        gtk-update-icon-cache -f -q /usr/share/icons/Papirus-Custom || true
+    else
+        log "VAROVANI: Balicek Papirus-Custom.tar.gz nebyl nalezen!"
+    fi
+
+    # B) Úprava motivu Lubuntu Arc (Nasazení tvého vlastního lxqt-panel.qss)
+    local QSS_SRC="$CONTENTS_DIR/lxqt/config/lxqt-panel.qss"
+    local THEME_DIR="$USER_HOME/.local/share/lxqt/themes/Lubuntu Arc"
+    if [ -f "$QSS_SRC" ] && [ -d "$THEME_DIR" ]; then
+        log "Aplikuji QSS fix pro bile ikony na panelu..."
+        cp "$QSS_SRC" "$THEME_DIR/" || true
+        chown "$REAL_USER:$REAL_USER" "$THEME_DIR/lxqt-panel.qss" || true
+    fi
+
+    # C) Nasazení předpřipravených konfigurací (Vzhled a GTK lock)
+    local APP_CONF_SRC="$CONTENTS_DIR/lxqt/config/lxqt-config-appearance.conf"
+    local LXQT_CONF_DIR="$USER_HOME/.config/lxqt"
+    mkdir -p "$LXQT_CONF_DIR"
+    
+    if [ -f "$APP_CONF_SRC" ]; then
+        log "Kopiruji lxqt-config-appearance.conf (GTK lock)..."
+        cp "$APP_CONF_SRC" "$LXQT_CONF_DIR/" || true
+    fi
+    
+    # D) Ošetření konfigurace panelu (Uzamčení panelu na Papirus-Dark)
+    local PANEL_CONF="$LXQT_CONF_DIR/panel.conf"
+    if [ -f "$PANEL_CONF" ]; then
+        # Smaže jakýkoliv předchozí iconTheme a práskne tam natvrdo ten Dark
+        sed -i '/^iconTheme=/d' "$PANEL_CONF" || true
+        sed -i '/^\[General\]/a iconTheme=Papirus-Dark' "$PANEL_CONF" || true
+    fi
+
+    # E) Fix pro CopyQ (Pokud se nepoužívá předpřipravený copyq.conf)
+    local COPYQ_CONF="$USER_HOME/.config/copyq/copyq.conf"
+    if [ -f "$COPYQ_CONF" ]; then
+        sed -i 's/use_system_icons=false/use_system_icons=true/' "$COPYQ_CONF" || true
+    fi
+
+    # Oprava práv pro jistotu (když skript běží pod rootem)
+    chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config/lxqt" || true
+    
+    # --- KONEC NOVÉ ČÁSTI ---
 
     # 2. XFWM4 Session
     local SESSION_CONF="$USER_HOME/.config/lxqt/session.conf"

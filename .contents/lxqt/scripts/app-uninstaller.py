@@ -119,7 +119,7 @@ class AppUninstaller(QWidget):
         return blacklist
 
     def initUI(self):
-        self.setWindowTitle('Odinstalovat programy (Sjednocený Správce)')
+        self.setWindowTitle('Odinstalovat programy')
         self.setFixedSize(550, 600)
         self.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
         
@@ -141,12 +141,12 @@ class AppUninstaller(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
         
-        lbl_info = QLabel("<b>Správce aplikací</b><br>Vyberte program nebo hru pro trvalé odstranění.")
+        lbl_info = QLabel("<b>Správce aplikací</b><br>Vyberte aplikaci pro trvalé odstranění.")
         lbl_info.setStyleSheet("font-size: 12pt;")
         layout.addWidget(lbl_info)
 
         self.search_bar = QLineEdit()
-        self.search_bar.setPlaceholderText("Hledat (např. Chrome nebo Call of Duty)...")
+        self.search_bar.setPlaceholderText("Hledat...")
         self.search_bar.textChanged.connect(self.filter_apps)
         layout.addWidget(self.search_bar)
         
