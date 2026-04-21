@@ -2,6 +2,8 @@
 import sys
 import os
 import subprocess
+import glob      # PŘIDÁNO
+import shutil    # PŘIDÁNO
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, 
                              QLineEdit, QPushButton, QMessageBox, QListWidget, 
                              QListWidgetItem, QLabel)
@@ -171,26 +173,51 @@ class AppUninstaller(QWidget):
                     lines = f.readlines()
 
                 current_key = None
+                display_name = None
+                display_icon = None
+
                 for line in lines:
                     line = line.strip()
                     
                     if line.startswith("[") and "\\Uninstall\\" in line:
-                        # 1. Vezmeme jen poslední část cesty za posledním lomítkem
+                        # Uložení předchozí nalezéné hry, než přejdeme na další klíč
+                        if current_key and display_name:
+                            if "Wine" not in display_name and "Gecko" not in display_name and "Mono" not in display_name:
+                                wine_apps[display_name] = {"uuid": current_key, "icon": display_icon}
+                        
                         raw_key = line.split("\\")[-1]
-                        # 2. FINÁLNÍ OPRAVA: Odsekneme závorku i s tím pitomým časovým razítkem!
                         current_key = raw_key.split("]")[0]
+                        display_name = None
+                        display_icon = None
+                        
                     elif line.startswith("["):
+                        if current_key and display_name:
+                            if "Wine" not in display_name and "Gecko" not in display_name and "Mono" not in display_name:
+                                wine_apps[display_name] = {"uuid": current_key, "icon": display_icon}
                         current_key = None
-                    elif current_key and line.startswith('"DisplayName"='):
-                        app_name = line.split("=", 1)[1].strip('"')
-                        # Odfiltrujeme systémový Wine balast
-                        if "Wine" not in app_name and "Gecko" not in app_name and "Mono" not in app_name:
-                            wine_apps[app_name] = current_key
+                        display_name = None
+                        display_icon = None
+                        
+                    elif current_key:
+                        if line.startswith('"DisplayName"='):
+                            display_name = line.split("=", 1)[1].strip('"')
+                        elif line.startswith('"DisplayIcon"='):
+                            display_icon = line.split("=", 1)[1].strip('"')
+
+                # Zachycení úplně poslední hry v souboru
+                if current_key and display_name:
+                    if "Wine" not in display_name and "Gecko" not in display_name and "Mono" not in display_name:
+                        wine_apps[display_name] = {"uuid": current_key, "icon": display_icon}
             except Exception:
                 pass
 
         # Naplnění do hlavní tabulky pro vykreslení
-        for app_name, app_uuid in wine_apps.items():
+        for app_name, data in wine_apps.items():
+            display_name = f"{app_name} (Windows Program)"
+            if display_name not in apps_data:
+                # TADY SE DĚJE TA MAGIE S IKONOU!
+                real_icon = extract_wine_icon(data["icon"], app_name) or "wine"
+                apps_data[display_name] = {"filepath": data["uuid"], "filename": "wine_app", "icon": real_icon, "is_wine": True}
             display_name = f"{app_name} (Windows Program)"
             if display_name not in apps_data:
                 apps_data[display_name] = {"filepath": app_uuid, "filename": "wine_app", "icon": "wine", "is_wine": True}
@@ -305,6 +332,46 @@ class AppUninstaller(QWidget):
             except: pass
         subprocess.run(["update-desktop-database", os.path.expanduser("~/.local/share/applications")], capture_output=True)
 
+    # --- POMOCNÁ FUNKCE PRO EXTRAKCI IKON Z WINDOWS EXE SOUBORŮ ---
+    def extract_wine_icon(win_path, app_name):
+        if not win_path: return None
+        # Odstraní uvozovky a index ikony (např. C:\hra.exe,0)
+        win_path = win_path.split(',')[0].strip('"\'') 
+        if not win_path.lower().startswith("c:\\"): return None
+        
+        # Převod Windows cesty na Linuxovou (C:\ -> ~/.wine/drive_c/)
+        linux_path = os.path.expanduser("~/.wine/drive_c/" + win_path[3:].replace("\\", "/"))
+        if not os.path.exists(linux_path): return None
+
+        # PyQt nativně podporuje .ico soubory
+        if linux_path.lower().endswith(".ico"): return linux_path
+
+        # Cache složka, aby to při dalším spuštění nelagovalo
+        cache_dir = os.path.expanduser("~/.cache/wine-icons")
+        os.makedirs(cache_dir, exist_ok=True)
+        safe_name = "".join(c for c in app_name if c.isalnum()).lower()
+        cached_icon = os.path.join(cache_dir, f"{safe_name}.png")
+        
+        if os.path.exists(cached_icon): return cached_icon
+
+        # Vytažení ikony z EXE souboru
+        if linux_path.lower().endswith(".exe") and shutil.which("wrestool"):
+            tmp_ico = f"/tmp/{safe_name}.ico"
+            try:
+                with open(tmp_ico, "wb") as f:
+                    subprocess.run(["wrestool", "-x", "-t", "14", linux_path], stdout=f, stderr=subprocess.DEVNULL)
+                if os.path.exists(tmp_ico) and os.path.getsize(tmp_ico) > 0:
+                    out_dir = f"/tmp/{safe_name}_png"
+                    os.makedirs(out_dir, exist_ok=True)
+                    subprocess.run(["icotool", "-x", tmp_ico, "-o", out_dir], stderr=subprocess.DEVNULL)
+                    pngs = glob.glob(f"{out_dir}/*.png")
+                    if pngs:
+                        best = max(pngs, key=os.path.getsize) # Vybere ikonu s nejvyšším rozlišením
+                        shutil.copy(best, cached_icon)
+                        return cached_icon
+            except: pass
+        return None
+    
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     QIcon.setThemeName("Papirus")
