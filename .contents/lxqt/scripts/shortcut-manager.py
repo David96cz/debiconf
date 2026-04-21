@@ -563,28 +563,60 @@ class ShortcutApp(QMainWindow):
 
     def load_applications(self):
         self.table.setRowCount(0)
-        apps_dict = {} # Deduplikace podle názvu souboru
+        apps_dict = {} 
         
-        for d in [SYSTEM_APPS_DIR, APPS_DIR]:
-            if not os.path.exists(d): continue
-            for f in os.listdir(d):
+        if not os.path.exists(APPS_DIR): return
+        
+        for root, dirs, files in os.walk(APPS_DIR):
+            for f in files:
                 if f.endswith(".desktop"):
-                    path = os.path.join(d, f)
+                    path = os.path.join(root, f)
                     name, icon, is_custom = parse_desktop_file(path)
-                    if name:
-                        apps_dict[f] = {"name": name, "icon": icon, "path": path, "custom": is_custom}
+                    
+                    if not name: continue
+                    
+                    # KLÍČOVÁ ZMĚNA: Zjišťujeme přesnou relativní pozici vůči ~/.local/share/applications
+                    rel_path = os.path.relpath(path, APPS_DIR)
+                    
+                    # Inteligentní detekce typu
+                    if is_custom:
+                        typ = "Vlastní"
+                    elif rel_path.startswith("wine/"):
+                        # Fyzicky zavřeno v podsložce 'wine' (Nainstalované hry, Uninstallery)
+                        typ = "Wine Aplikace"
+                    else:
+                        # Vše ostatní v hlavní složce (i když se to jmenuje wine-installer)
+                        typ = "Systémový"
+                        
+                    # Klíčem je název souboru
+                    apps_dict[f] = {"name": name, "icon": icon, "path": path, "typ": typ, "filename": f}
 
         sorted_keys = sorted(apps_dict.keys(), key=lambda x: apps_dict[x]["name"].lower())
         self.table.setRowCount(len(sorted_keys))
         
         for row, key in enumerate(sorted_keys):
             data = apps_dict[key]
-            # Checkbox
+            
+            # Checkbox viditelnosti (nebo Zámek)
             ck_widget = QWidget()
             ck_layout = QHBoxLayout(ck_widget)
-            cb = QCheckBox()
-            with open(data["path"], 'r', errors='ignore') as f: cb.setChecked("NoDisplay=true" not in f.read())
-            ck_layout.addWidget(cb); ck_layout.setAlignment(Qt.AlignCenter); ck_layout.setContentsMargins(0,0,0,0)
+            
+            # Záchranná brzda: Správce zástupců nepůjde nikdy skrýt
+            is_manager = "správce zástupců" in data["name"].lower() or "shortcut-manager" in data["filename"].lower()
+            
+            if is_manager:
+                lbl = QLabel("🔒")
+                lbl.setAlignment(Qt.AlignCenter)
+                ck_layout.addWidget(lbl)
+            else:
+                cb = QCheckBox()
+                try:
+                    with open(data["path"], 'r', errors='ignore') as f: 
+                        cb.setChecked("NoDisplay=true" not in f.read())
+                except: pass
+                ck_layout.addWidget(cb)
+                
+            ck_layout.setAlignment(Qt.AlignCenter); ck_layout.setContentsMargins(0,0,0,0)
             self.table.setCellWidget(row, 0, ck_widget)
             
             # Ikona + Jméno
@@ -592,9 +624,11 @@ class ShortcutApp(QMainWindow):
             item.setIcon(get_app_icon(data["icon"]))
             self.table.setItem(row, 1, item)
             
-            # Typ
-            typ_item = QTableWidgetItem("Uživatelský" if data["custom"] else "Systémový")
-            if data["custom"]: typ_item.setForeground(Qt.blue)
+            # Barvy podle typu
+            typ_item = QTableWidgetItem(data["typ"])
+            if data["typ"] == "Vlastní": typ_item.setForeground(Qt.blue)
+            elif data["typ"] == "Wine Aplikace": typ_item.setForeground(Qt.darkMagenta)
+            else: typ_item.setForeground(Qt.black) # Systémový
             self.table.setItem(row, 2, typ_item)
             
             # Cesta (skrytá)
