@@ -630,15 +630,35 @@ install_packages() {
             
             rm -rf "$USER_HOME/.cache/thumbnails/*" || true
 
-            log "Vytvářím globálního strážce rozlišení pro Wine..."
-    
-            echo '#!/bin/bash' > /usr/local/bin/wine
-            echo '/usr/bin/wine "$@"' >> /usr/local/bin/wine
-            echo 'EXIT_CODE=$?' >> /usr/local/bin/wine
-            echo 'xrandr -s 0 >/dev/null 2>&1 || true' >> /usr/local/bin/wine
-            echo 'exit $EXIT_CODE' >> /usr/local/bin/wine
+            log "Upravuji Wine strážce, aby hlídal i pozice ikon na ploše..."
+
+            local WINE_WRAPPER="/usr/local/bin/wine"
             
-            chmod +x /usr/local/bin/wine
+            # 1. Záhlaví a spuštění Wine (záznam původního stavu)
+            echo '#!/bin/bash' > "$WINE_WRAPPER"
+            echo 'CONF_FILE="$HOME/.config/pcmanfm-qt/lxqt/desktop-items.conf"' >> "$WINE_WRAPPER"
+            
+            # 2. Záloha pozic před spuštěním (pokud soubor existuje)
+            echo '[ -f "$CONF_FILE" ] && cp "$CONF_FILE" "${CONF_FILE}.bak"' >> "$WINE_WRAPPER"
+            
+            # 3. Spuštění samotného Wine
+            echo '/usr/bin/wine "$@"' >> "$WINE_WRAPPER"
+            echo 'EXIT_CODE=$?' >> "$WINE_WRAPPER"
+            
+            # 4. Návrat rozlišení monitoru
+            echo 'xrandr -s 0 >/dev/null 2>&1 || true' >> "$WINE_WRAPPER"
+            
+            # 5. Obnova ikon (Trik: nejdřív vypnout plochu, pak vrátit konfig, pak zapnout)
+            echo 'if [ -f "${CONF_FILE}.bak" ]; then' >> "$WINE_WRAPPER"
+            echo '    killall pcmanfm-qt 2>/dev/null' >> "$WINE_WRAPPER"
+            echo '    sleep 1' >> "$WINE_WRAPPER"
+            echo '    mv "${CONF_FILE}.bak" "$CONF_FILE"' >> "$WINE_WRAPPER"
+            echo '    (pcmanfm-qt --desktop >/dev/null 2>&1 & disown)' >> "$WINE_WRAPPER"
+            echo 'fi' >> "$WINE_WRAPPER"
+            
+            echo 'exit $EXIT_CODE' >> "$WINE_WRAPPER"
+            
+            chmod +x "$WINE_WRAPPER"
         fi
     fi
 
@@ -826,19 +846,51 @@ lxqt_setup_system_integrations() {
     mkdir -p "$USER_HOME/.local/bin"
     mkdir -p "$USER_HOME/.config/autostart"
     
-    # Skript, který tiše hlídá Plochu a automaticky povoluje zástupce (BEZ EOF)
-    echo '#!/bin/bash' > "$USER_HOME/.local/bin/desktop-trust.sh"
-    echo 'DESKTOP_DIR=$(xdg-user-dir DESKTOP)' >> "$USER_HOME/.local/bin/desktop-trust.sh"
-    echo '[ -z "$DESKTOP_DIR" ] && DESKTOP_DIR="$HOME/Plocha"' >> "$USER_HOME/.local/bin/desktop-trust.sh"
-    echo 'while true; do' >> "$USER_HOME/.local/bin/desktop-trust.sh"
-    echo '    inotifywait -q -e create,moved_to "$DESKTOP_DIR" | while read dir action file; do' >> "$USER_HOME/.local/bin/desktop-trust.sh"
-    echo '        if [[ "$file" == *.desktop ]]; then' >> "$USER_HOME/.local/bin/desktop-trust.sh"
-    echo '            chmod +x "$dir$file"' >> "$USER_HOME/.local/bin/desktop-trust.sh"
-    echo '        fi' >> "$USER_HOME/.local/bin/desktop-trust.sh"
-    echo '    done' >> "$USER_HOME/.local/bin/desktop-trust.sh"
-    echo 'done' >> "$USER_HOME/.local/bin/desktop-trust.sh"
-    
-    chmod +x "$USER_HOME/.local/bin/desktop-trust.sh"
+    # --- AUTOMATICKÉ POVOLOVÁNÍ ZÁSTUPCŮ (Desktop Trust) ---
+    log "Nasazuji hlídací skript pro automatické důvěřování zástupcům na ploše..."
+
+    # 1. Instalace závislosti (pokud by náhodou v systému chyběla)
+    apt-get install -y inotify-tools || true
+
+    # 2. Vytvoření složek
+    mkdir -p "$USER_HOME/.local/bin"
+    mkdir -p "$USER_HOME/.config/autostart"
+
+    local TRUST_SCRIPT="$USER_HOME/.local/bin/desktop-trust.sh"
+
+    # 3. Zápis hlídacího skriptu (BEZ EOF, s tvým vítězným GIO příkazem)
+    echo '#!/bin/bash' > "$TRUST_SCRIPT"
+    echo 'DESKTOP_DIR=$(xdg-user-dir DESKTOP)' >> "$TRUST_SCRIPT"
+    echo '[ -z "$DESKTOP_DIR" ] && DESKTOP_DIR="$HOME/Desktop"' >> "$TRUST_SCRIPT"
+    echo 'while [ ! -d "$DESKTOP_DIR" ]; do sleep 2; done' >> "$TRUST_SCRIPT"
+    echo '' >> "$TRUST_SCRIPT"
+    echo 'inotifywait -m -q -e create,moved_to "$DESKTOP_DIR" --format "%w%f" | while read -r filepath; do' >> "$TRUST_SCRIPT"
+    echo '    if [[ "$filepath" == *.desktop ]]; then' >> "$TRUST_SCRIPT"
+    echo '        # Krátká pauza, aby se soubor stihl fyzicky zapsat na disk' >> "$TRUST_SCRIPT"
+    echo '        sleep 1' >> "$TRUST_SCRIPT"
+    echo '        # Tvůj ověřený příkaz pro LXQt trust' >> "$TRUST_SCRIPT"
+    echo '        gio set "$filepath" -t string metadata::trust true 2>/dev/null' >> "$TRUST_SCRIPT"
+    echo '        chmod +x "$filepath" 2>/dev/null' >> "$TRUST_SCRIPT"
+    echo '    fi' >> "$TRUST_SCRIPT"
+    echo 'done' >> "$TRUST_SCRIPT"
+
+    # 4. Nastavení práv pro skript
+    chmod +x "$TRUST_SCRIPT"
+    chown "$REAL_USER:$REAL_USER" "$TRUST_SCRIPT"
+
+    # 5. Vytvoření Autostartu (aby hlídač naskočil po přihlášení)
+    local AUTO_PATH="$USER_HOME/.config/autostart/desktop-trust.desktop"
+    echo '[Desktop Entry]' > "$AUTO_PATH"
+    echo 'Type=Application' >> "$AUTO_PATH"
+    echo 'Name=Desktop Trust Fix' >> "$AUTO_PATH"
+    echo "Exec=bash $TRUST_SCRIPT" >> "$AUTO_PATH"
+    echo 'Hidden=false' >> "$AUTO_PATH"
+    echo 'NoDisplay=false' >> "$AUTO_PATH"
+    echo 'X-GNOME-Autostart-enabled=true' >> "$AUTO_PATH"
+
+    # Oprava práv pro autostart
+    chown "$REAL_USER:$REAL_USER" "$AUTO_PATH"
+    # ------------------------------------------
     
     # Přidání do autostartu LXQt
     echo '[Desktop Entry]' > "$USER_HOME/.config/autostart/desktop-trust.desktop"
@@ -1342,19 +1394,38 @@ lxqt_setup_apps_and_defaults() {
             { print }
         ' "$PEAZIP_DEST" > "${PEAZIP_DEST}.tmp" && mv "${PEAZIP_DEST}.tmp" "$PEAZIP_DEST"
 
-        # Definuj, co v systému aktuálně používáš na archivy
-        local ARCHIVER_APP="peazip" 
-
-        # Zápis do konfigurace PCManFM-Qt (OPRAVA: $USER_HOME místo $HOME)
+        # --- ODSTRANĚNÍ NATIVNÍHO TLAČÍTKA A NASTAVENÍ PEAZIPU ---
+        log "Odstraňuji nativní nefunkční komprimaci a nasazuji PeaZip akci..."
+        
+        # 1. Vymazání seznamu archiverů (Definitivní smrt mrtvého tlačítka "Komprimovat")
+        # Tohle způsobí, že se původní zmetek v menu vůbec nevykreslí
+        rm -f /usr/share/libfm-qt/archivers.list 2>/dev/null || true
+        rm -f /usr/share/libfm-qt6/archivers.list 2>/dev/null || true
+        rm -f /usr/share/libfm/archivers.list 2>/dev/null || true
+        rm -f /etc/xdg/libfm/archivers.list 2>/dev/null || true
+        
+        # 2. Vyčištění PCManFM-Qt konfigurace (aby v ní nezůstaly staré záznamy)
         local PCMANFM_CONF="$USER_HOME/.config/pcmanfm-qt/lxqt/settings.conf"
-        mkdir -p "$(dirname "$PCMANFM_CONF")"
         if [ -f "$PCMANFM_CONF" ]; then
-            sed -i '/^Archiver=/d' "$PCMANFM_CONF"
-            sed -i "/^\[Behavior\]/a Archiver=$ARCHIVER_APP" "$PCMANFM_CONF"
-        else
-            # Zajištění funkčnosti i když soubor ještě vůbec neexistuje
-            echo -e "[Behavior]\nArchiver=$ARCHIVER_APP" > "$PCMANFM_CONF"
+            sed -i '/^Archiver=/d' "$PCMANFM_CONF" || true
         fi
+        
+        # 3. Vytvoření vlastního a plně funkčního tlačítka pro PeaZip
+        local ACTIONS_DIR="$USER_HOME/.local/share/file-manager/actions"
+        mkdir -p "$ACTIONS_DIR"
+        
+        local PEAZIP_ACTION="$ACTIONS_DIR/peazip.desktop"
+        echo '[Desktop Entry]' > "$PEAZIP_ACTION"
+        echo 'Type=Action' >> "$PEAZIP_ACTION"
+        echo 'Name=Komprimovat (PeaZip)...' >> "$PEAZIP_ACTION"
+        echo 'Icon=peazip' >> "$PEAZIP_ACTION"
+        echo 'Profiles=profile-zero;' >> "$PEAZIP_ACTION"
+        echo '[X-Action-Profile profile-zero]' >> "$PEAZIP_ACTION"
+        echo 'MimeTypes=all/allfiles;inode/directory;' >> "$PEAZIP_ACTION"
+        echo 'Exec=peazip -add %F' >> "$PEAZIP_ACTION"
+        
+        # 4. Uzamčení správných práv pro uživatele (aby akce fungovaly)
+        chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.local/share/file-manager" || true
         # ------------------------------------------
     fi
 }
