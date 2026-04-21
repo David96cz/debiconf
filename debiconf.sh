@@ -706,17 +706,47 @@ lxqt_prepare_base_configs() {
     cp "$CONF_SRC/"*.conf "$USER_HOME/.config/lxqt/" 2>/dev/null || true
     cp "$CONF_SRC/pcmanfm-qt.conf" "$USER_HOME/.config/pcmanfm-qt/lxqt/settings.conf" 2>/dev/null || true
 
-    # Základní nastavení LXQt
+    # Základní nastavení LXQt a sjednocení vzhledu (Jako v Lubuntu)
     local LXQT_CONF="$USER_HOME/.config/lxqt/lxqt.conf"
-    if [ -f "$LXQT_CONF" ]; then
-        sed -i "s/^ask_before_logout=.*/ask_before_logout=$CONF_OUT/" "$LXQT_CONF" || true
-        sed -i "s/^theme=.*/theme=Lubuntu Arc/" "$LXQT_CONF" || true
-        if grep -q "^language=" "$LXQT_CONF"; then
-            sed -i "s/^language=.*/language=$SYS_LANG_CODE/" "$LXQT_CONF" || true
-        else
-            sed -i "/^\[General\]/a language=$SYS_LANG_CODE" "$LXQT_CONF" || true
-        fi
+    mkdir -p "$(dirname "$LXQT_CONF")"
+    
+    # Pojistka, kdyby soubor vůbec neexistoval
+    if [ ! -f "$LXQT_CONF" ]; then
+        echo "[General]" > "$LXQT_CONF"
     fi
+
+    # 1. Vymazání všech starých sraček, aby to nedělalo chameleona (Smaže i vlastní palety z předchozích motivů)
+    sed -i '/^theme=/d' "$LXQT_CONF" || true
+    sed -i '/^icon_theme=/d' "$LXQT_CONF" || true
+    sed -i '/^style=/d' "$LXQT_CONF" || true
+    sed -i '/^customPalette=/d' "$LXQT_CONF" || true
+    sed -i '/^ask_before_logout=/d' "$LXQT_CONF" || true
+
+    # 2. Zápis PANELU a ODHLÁŠENÍ (Do sekce General)
+    sed -i "/^\[General\]/a theme=Lubuntu Arc" "$LXQT_CONF"
+    sed -i "/^\[General\]/a ask_before_logout=$CONF_OUT" "$LXQT_CONF"
+    
+    # 3. Zápis IKON
+    # Lubuntu používá standardní Papirus. Pokud chceš ikony do panelu o něco svítivější, můžeš zkusit Papirus-Dark
+    sed -i "/^\[General\]/a icon_theme=Papirus" "$LXQT_CONF"
+
+    # 4. Zápis SVĚTLÝCH OKEN (Vytvoří/najde sekci Qt a zakáže míchání barev)
+    if ! grep -q "^\[Qt\]" "$LXQT_CONF"; then
+        echo "" >> "$LXQT_CONF"
+        echo "[Qt]" >> "$LXQT_CONF"
+    fi
+    sed -i "/^\[Qt\]/a style=Breeze" "$LXQT_CONF"
+    sed -i "/^\[Qt\]/a customPalette=false" "$LXQT_CONF"
+
+    # 5. Jazyk
+    if grep -q "^language=" "$LXQT_CONF"; then
+        sed -i "s/^language=.*/language=$SYS_LANG_CODE/" "$LXQT_CONF" || true
+    else
+        sed -i "/^\[General\]/a language=$SYS_LANG_CODE" "$LXQT_CONF" || true
+    fi
+    
+    # 6. Smazání paměti Trolltech (ZÁSADNÍ: aby Qt framework nelepil staré tmavé barvy na nová světla okna)
+    rm -f "$USER_HOME/.config/Trolltech.conf" || true
 
     # Zamezení možnosti odinstalace
     echo ">> Ukládám seznam neodstranitelných aplikací..."

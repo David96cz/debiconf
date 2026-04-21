@@ -43,7 +43,7 @@ class PasswordChanger(QWidget):
         self.cb_show_pass.stateChanged.connect(self.toggle_echo_mode)
         layout.addWidget(self.cb_show_pass)
 
-        self.cb_autologin = QCheckBox('Automatické přihlášení (při startu nechce heslo)')
+        self.cb_autologin = QCheckBox('Automatické přihlášení (při startu bez přihlašovací obrazovky)')
         if os.path.exists(self.autologin_conf):
             self.cb_autologin.setChecked(True)
         self.cb_autologin.stateChanged.connect(self.toggle_autologin)
