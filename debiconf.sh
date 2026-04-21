@@ -630,7 +630,15 @@ install_packages() {
             
             rm -rf "$USER_HOME/.cache/thumbnails/*" || true
 
+            log "Vytvářím globálního strážce rozlišení pro Wine..."
+    
+            echo '#!/bin/bash' > /usr/local/bin/wine
+            echo '/usr/bin/wine "$@"' >> /usr/local/bin/wine
+            echo 'EXIT_CODE=$?' >> /usr/local/bin/wine
+            echo 'xrandr -s 0 >/dev/null 2>&1 || true' >> /usr/local/bin/wine
+            echo 'exit $EXIT_CODE' >> /usr/local/bin/wine
             
+            chmod +x /usr/local/bin/wine
         fi
     fi
 
@@ -806,6 +814,33 @@ lxqt_setup_system_integrations() {
     # Passwd manažer
     echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/passwd, /usr/sbin/chpasswd, /bin/rm, /bin/mkdir, /bin/bash" | sudo tee /etc/sudoers.d/99-gui-pass-manager
     sudo chmod 0440 /etc/sudoers.d/99-gui-pass-manager
+
+    log "Vytvářím automatický odklepávač důvěry pro zástupce na ploše..."
+    mkdir -p "$USER_HOME/.local/bin"
+    mkdir -p "$USER_HOME/.config/autostart"
+    
+    # Skript, který tiše hlídá Plochu a automaticky povoluje zástupce (BEZ EOF)
+    echo '#!/bin/bash' > "$USER_HOME/.local/bin/desktop-trust.sh"
+    echo 'DESKTOP_DIR=$(xdg-user-dir DESKTOP)' >> "$USER_HOME/.local/bin/desktop-trust.sh"
+    echo '[ -z "$DESKTOP_DIR" ] && DESKTOP_DIR="$HOME/Plocha"' >> "$USER_HOME/.local/bin/desktop-trust.sh"
+    echo 'while true; do' >> "$USER_HOME/.local/bin/desktop-trust.sh"
+    echo '    inotifywait -q -e create,moved_to "$DESKTOP_DIR" | while read dir action file; do' >> "$USER_HOME/.local/bin/desktop-trust.sh"
+    echo '        if [[ "$file" == *.desktop ]]; then' >> "$USER_HOME/.local/bin/desktop-trust.sh"
+    echo '            chmod +x "$dir$file"' >> "$USER_HOME/.local/bin/desktop-trust.sh"
+    echo '        fi' >> "$USER_HOME/.local/bin/desktop-trust.sh"
+    echo '    done' >> "$USER_HOME/.local/bin/desktop-trust.sh"
+    echo 'done' >> "$USER_HOME/.local/bin/desktop-trust.sh"
+    
+    chmod +x "$USER_HOME/.local/bin/desktop-trust.sh"
+    
+    # Přidání do autostartu LXQt
+    echo '[Desktop Entry]' > "$USER_HOME/.config/autostart/desktop-trust.desktop"
+    echo 'Type=Application' >> "$USER_HOME/.config/autostart/desktop-trust.desktop"
+    echo 'Name=AutoTrust Desktop' >> "$USER_HOME/.config/autostart/desktop-trust.desktop"
+    echo "Exec=$USER_HOME/.local/bin/desktop-trust.sh" >> "$USER_HOME/.config/autostart/desktop-trust.desktop"
+    echo 'Hidden=false' >> "$USER_HOME/.config/autostart/desktop-trust.desktop"
+    
+    chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.local/bin/desktop-trust.sh" "$USER_HOME/.config/autostart/desktop-trust.desktop"
 }
 
 lxqt_setup_appearance() {

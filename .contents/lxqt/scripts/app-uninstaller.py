@@ -146,25 +146,36 @@ class AppUninstaller(QWidget):
                         apps_data[name] = {"filepath": filepath, "filename": filename, "icon": icon_name, "is_wine": False}
                 except: continue
 
-        # 2. NAČTENÍ WINDOWS (WINE) APLIKACÍ PŘÍMO Z REGISTRŮ!
-        try:
-            # Přidáme WINEDEBUG="-all", aby Wine nevyhazovalo ladící hlášky, které rozbijí seznam
-            env = os.environ.copy()
-            env["WINEDEBUG"] = "-all"
-            
-            wine_list = subprocess.run(["wine", "uninstaller", "--list"], capture_output=True, text=True, env=env)
-            if wine_list.returncode == 0:
-                for line in wine_list.stdout.splitlines():
-                    if "|||" in line:
-                        parts = line.split("|||")
-                        app_uuid = parts[0].strip() 
-                        app_name = parts[1].strip()
-                        
-                        display_name = f"{app_name} (Windows Program)"
-                        if display_name not in apps_data:
-                            apps_data[display_name] = {"filepath": app_uuid, "filename": "wine_app", "icon": "wine", "is_wine": True}
-        except Exception as e:
-            print(f"Chyba při čtení Wine registrů: {e}")
+       # 2. RYCHLÉ A SPOLEHLIVÉ NAČTENÍ Z WINE REGISTRŮ BEZ VOLÁNÍ WINE
+        wine_apps = {}
+        for reg_file in ["system.reg", "user.reg"]:
+            reg_path = os.path.expanduser(f"~/.wine/{reg_file}")
+            if not os.path.exists(reg_path): continue
+
+            try:
+                with open(reg_path, 'r', errors='ignore') as f:
+                    lines = f.readlines()
+
+                current_key = None
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith("[Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\"):
+                        current_key = line.split("\\\\")[-1].strip("]")
+                    elif line.startswith("["):
+                        current_key = None
+                    elif current_key and line.startswith('"DisplayName"='):
+                        app_name = line.split("=", 1)[1].strip('"')
+                        # Odfiltrujeme systémový Wine balast, aby tam nebylo Mono a Gecko
+                        if "Wine" not in app_name and "Gecko" not in app_name and "Mono" not in app_name:
+                            wine_apps[app_name] = current_key
+            except Exception:
+                pass
+
+        # Naplnění do hlavní tabulky pro vykreslení
+        for app_name, app_uuid in wine_apps.items():
+            display_name = f"{app_name} (Windows Program)"
+            if display_name not in apps_data:
+                apps_data[display_name] = {"filepath": app_uuid, "filename": "wine_app", "icon": "wine", "is_wine": True}
 
         # 3. VYKRESLENÍ VŠEHO DO JEDNOHO SEZNAMU
         for name in sorted(apps_data.keys()):
