@@ -1022,27 +1022,30 @@ lxqt_packages_install() {
 
     # 1. Albert - Správná cesta pro Debian 13
     log "Nasazuji oficiální repozitář Alberta pro Debian 13..."
-    curl -fsSL https://download.opensuse.org/repositories/home:manuelschneid3r/Debian_13/Release.key | gpg --dearmor | tee /etc/apt/trusted.gpg.d/home_manuelschneid3r.gpg > /dev/null
-    echo 'deb http://download.opensuse.org/repositories/home:/manuelschneid3r/Debian_13/ /' | tee /etc/apt/sources.list.d/albert.list
     
-    apt-get update -y
-    
-    # Zkusíme instalaci přes apt (pro automatické updaty v budoucnu)
-    if ! apt-get install -y albert; then
-        log "CHYBA apt instalace. Přepínám na dynamické stažení .deb přímo z adresáře..."
+    # Zkusíme stáhnout klíč. Pokud to selže (výpadek netu), repozitář se nepřidá a APT nezkolabuje.
+    if curl -fsSL --connect-timeout 10 --retry 3 https://download.opensuse.org/repositories/home:manuelschneid3r/Debian_13/Release.key | gpg --dearmor | tee /etc/apt/trusted.gpg.d/home_manuelschneid3r.gpg > /dev/null; then
+        echo 'deb http://download.opensuse.org/repositories/home:/manuelschneid3r/Debian_13/ /' | tee /etc/apt/sources.list.d/albert.list
+        apt-get update -y
         
-        # Scraper: Najde přesný název aktuálního balíčku v HTML kódu té stránky
-        local ALBERT_BASE="https://download.opensuse.org/repositories/home:/manuelschneid3r/Debian_13/amd64/"
-        local ALBERT_FILE=$(curl -s "$ALBERT_BASE" | grep -oE 'albert_[^"]+_amd64\.deb' | head -n 1)
-        
-        if [ -n "$ALBERT_FILE" ]; then
-            log "Našel jsem balíček: $ALBERT_FILE. Stahuji..."
-            wget -qO "/tmp/$ALBERT_FILE" "${ALBERT_BASE}${ALBERT_FILE}"
-            dpkg -i "/tmp/$ALBERT_FILE" || apt-get install -f -y
-            rm -f "/tmp/$ALBERT_FILE"
-        else
-            log "FATÁLNÍ CHYBA: Na té adrese se nepodařilo najít žádný albert...amd64.deb!"
+        # Zkusíme instalaci přes apt (pro automatické updaty v budoucnu)
+        if ! apt-get install -y albert; then
+            log "CHYBA apt instalace. Přepínám na dynamické stažení .deb přímo z adresáře..."
+            # Scraper...
+            local ALBERT_BASE="https://download.opensuse.org/repositories/home:/manuelschneid3r/Debian_13/amd64/"
+            local ALBERT_FILE=$(curl -s "$ALBERT_BASE" | grep -oE 'albert_[^"]+_amd64\.deb' | head -n 1)
+            
+            if [ -n "$ALBERT_FILE" ]; then
+                log "Našel jsem balíček: $ALBERT_FILE. Stahuji..."
+                wget -qO "/tmp/$ALBERT_FILE" "${ALBERT_BASE}${ALBERT_FILE}"
+                dpkg -i "/tmp/$ALBERT_FILE" || apt-get install -f -y
+                rm -f "/tmp/$ALBERT_FILE"
+            else
+                log "FATÁLNÍ CHYBA: Na té adrese se nepodařilo najít žádný albert...amd64.deb!"
+            fi
         fi
+    else
+        log "CHYBA: Nepodařilo se stáhnout GPG klíč pro Albert (asi výpadek sítě). Přeskakuji!"
     fi
 
    # 2. PeaZip - Dynamické stažení nejnovější Qt6 verze z GitHubu
