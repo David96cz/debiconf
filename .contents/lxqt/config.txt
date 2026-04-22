@@ -23,6 +23,7 @@ yad-icon-browser.desktop
 qps.desktop
 gdebi.desktop
 vim.desktop
+lxappearance.desktop
 
 [AUTORUN]
 albert
