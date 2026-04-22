@@ -991,7 +991,7 @@ lxqt_setup_appearance() {
     if [ -f "$PANEL_CONF" ]; then
         # Smaže jakýkoliv předchozí iconTheme a práskne tam natvrdo ten Dark
         sed -i '/^iconTheme=/d' "$PANEL_CONF" || true
-        sed -i '/^\[General\]/a iconTheme=Papirus-Dark' "$PANEL_CONF" || true
+        #sed -i '/^\[General\]/a iconTheme=Papirus-Dark' "$PANEL_CONF" || true
     fi
 
     # E) Fix pro CopyQ (Pokud se nepoužívá předpřipravený copyq.conf)
