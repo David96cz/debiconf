@@ -1589,7 +1589,7 @@ configure_plasma() {
 
     chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config" || true
 
-        # ==========================================================
+    # ==========================================================
     # PARSOVÁNÍ CONFIGU A APLIKACE DYNAMICKÝCH PRAVIDEL
     # ==========================================================
     local PLASMA_CONF="$CONTENTS_DIR/plasma/config.txt"
