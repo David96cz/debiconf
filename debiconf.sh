@@ -1589,7 +1589,20 @@ configure_plasma() {
 
     chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config" || true
 
-        # ==========================================================
+    # Nastavení vzhledu LightDM, aby ladil s KDE Plasma (Breeze)
+    log "Konfiguruji LightDM GTK Greeter pro vzhled Plasma Breeze..."
+
+    sudo mkdir -p /etc/lightdm
+    sudo bash -c 'echo "[greeter]" > /etc/lightdm/lightdm-gtk-greeter.conf'
+    sudo bash -c 'echo "theme-name = Breeze" >> /etc/lightdm/lightdm-gtk-greeter.conf'
+    sudo bash -c 'echo "icon-theme-name = breeze" >> /etc/lightdm/lightdm-gtk-greeter.conf'
+    sudo bash -c 'echo "font-name = Noto Sans 10" >> /etc/lightdm/lightdm-gtk-greeter.conf'
+    # Volitelné: Nastavení pozadí (použije výchozí Debian tapetu, pokud existuje)
+    sudo bash -c 'echo "background = /usr/share/desktop-base/active-theme/login/background.svg" >> /etc/lightdm/lightdm-gtk-greeter.conf'
+    # Uspořádání horní lišty: Jméno PC, mezera, hodiny, mezera, výběr relace, vypínací tlačítko
+    sudo bash -c 'echo "indicators = ~host;~spacer;~clock;~spacer;~session;~power" >> /etc/lightdm/lightdm-gtk-greeter.conf'
+
+    # ==========================================================
     # PARSOVÁNÍ CONFIGU A APLIKACE DYNAMICKÝCH PRAVIDEL
     # ==========================================================
     local PLASMA_CONF="$CONTENTS_DIR/plasma/config.txt"
@@ -1683,6 +1696,49 @@ configure_plasma() {
                     sed -i "/<entry name=\"icon\"/,/<\/entry>/ s|<default>.*</default>|<default>$START_MENU_ICON</default>|" "$XML_FILE" || true
                 fi
             done
+        fi
+
+        # 4. DODATEČNÉ NASTAVENÍ (Relace a Ikony na ploše)
+        # ==========================================================
+        local SET_EMPTY_SESSION=$(sed -n '/^\[CONFIG\]/,/^\[/p' "$PLASMA_CONF" | grep "^SET_EMPTY_SESSION=" | cut -d= -f2 | tr -d '\r')
+        local SHOW_SYSTEM_ICONS=$(sed -n '/^\[CONFIG\]/,/^\[/p' "$PLASMA_CONF" | grep "^SHOW_SYSTEM_ICONS=" | cut -d= -f2 | tr -d '\r')
+
+        # Obnovení relace - Spustit s prázdnou relací
+        if [ "$SET_EMPTY_SESSION" == "true" ]; then
+            log "Nastavuji spouštění systému s prázdnou relací..."
+            run_as_user "kwriteconfig6 --file ksmserverrc --group General --key loginMode emptySession 2>/dev/null || kwriteconfig5 --file ksmserverrc --group General --key loginMode emptySession 2>/dev/null"
+        fi
+
+        # Zobrazení ikon na ploše (Domov a Koš)
+        if [ "$SHOW_SYSTEM_ICONS" == "true" ]; then
+            log "Vytvářím systémové ikony na ploše..."
+            
+            # Zjištění cesty k ploše (funguje pro CZ i EN lokalizaci)
+            local DESKTOP_DIR=$(run_as_user "xdg-user-dir DESKTOP")
+            
+            if [ -n "$DESKTOP_DIR" ] && [ -d "$DESKTOP_DIR" ]; then
+                # Domovská složka
+                echo "[Desktop Entry]" > "$DESKTOP_DIR/Domov.desktop"
+                echo "Icon=user-home" >> "$DESKTOP_DIR/Domov.desktop"
+                echo "Type=Link" >> "$DESKTOP_DIR/Domov.desktop"
+                echo "URL=file://$USER_HOME" >> "$DESKTOP_DIR/Domov.desktop"
+                echo "Name=Home" >> "$DESKTOP_DIR/Domov.desktop"
+                echo "Name[cs]=Domovská složka" >> "$DESKTOP_DIR/Domov.desktop"
+                
+                # Koš
+                echo "[Desktop Entry]" > "$DESKTOP_DIR/Kos.desktop"
+                echo "Icon=user-trash" >> "$DESKTOP_DIR/Kos.desktop"
+                echo "Type=Link" >> "$DESKTOP_DIR/Kos.desktop"
+                echo "URL=trash:/" >> "$DESKTOP_DIR/Kos.desktop"
+                echo "Name=Trash" >> "$DESKTOP_DIR/Kos.desktop"
+                echo "Name[cs]=Koš" >> "$DESKTOP_DIR/Kos.desktop"
+                
+                # Nastavení práv, aby byly ikony spustitelné a vlastněné uživatelem
+                chown "$REAL_USER:$REAL_USER" "$DESKTOP_DIR/Domov.desktop" "$DESKTOP_DIR/Kos.desktop"
+                chmod +x "$DESKTOP_DIR/Domov.desktop" "$DESKTOP_DIR/Kos.desktop"
+            else
+                log "CHYBA: Nepodařilo se detekovat složku plochy, ikony nebudou vytvořeny."
+            fi
         fi
     fi
     

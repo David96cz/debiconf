@@ -3,9 +3,14 @@ SET_BALOO_INDEXING=true
 BALOO_FOLDERS=/home/$REAL_USER/,/media/,/mnt/
 START_MENU_ICON=preferences-system-linux
 REVERSE_TOUCHPAD=true
+SET_EMPTY_SESSION=true
+SHOW_SYSTEM_ICONS=true
 
 [CORE_PACKAGES]
-plasma-desktop sddm konsole dolphin kio-extras plasma-nm systemsettings kscreen kmenuedit powerdevil plasma-pa bluedevil kinfocenter pipewire pipewire-audio pipewire-pulse wireplumber plasma-discover kde-spectacle wl-clipboard breeze-gtk-theme kde-config-gtk-style polkit-kde-agent-1 sddm-theme-breeze gwenview okular xdg-desktop-portal xdg-desktop-portal-kde 
+...
+
+[CORE_PACKAGES]
+plasma-desktop lightdm-gtk-greeter konsole dolphin kio-extras plasma-nm systemsettings kscreen kmenuedit powerdevil plasma-pa bluedevil kinfocenter pipewire pipewire-audio pipewire-pulse wireplumber plasma-discover kde-spectacle wl-clipboard breeze-gtk-theme kde-config-gtk-style polkit-kde-agent-1 gwenview okular xdg-desktop-portal xdg-desktop-portal-kde 
 
 [EXTRA_PACKAGES]
 
