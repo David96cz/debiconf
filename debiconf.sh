@@ -1607,44 +1607,49 @@ configure_plasma() {
         log "Detekuji touchpady pro nastavení scrollování a prokliku dvěma prsty..."
         local KCM_INPUT="$USER_HOME/.config/kcminputrc"
         
-        # Skript "osahá" jádro a najde všechny připojené touchpady
-        awk -v RS='' '/Touch[Pp]ad|ALPS|Elan|FocalTech/' /proc/bus/input/devices | while read -r block; do
+        # Nejsilnější možný filtr: převede text na malá písmena a chytí vše od touchpadů, přes trackpady, až po Synaptics a I2C hardware
+        awk -v RS='' 'tolower($0) ~ /touch|track|synaptics|alps|elan|focal|i2c hid/' /proc/bus/input/devices | while read -r block; do
             local VENDOR_HEX=$(echo "$block" | grep -o 'Vendor=[0-9a-fA-F]*' | cut -d= -f2)
             local PRODUCT_HEX=$(echo "$block" | grep -o 'Product=[0-9a-fA-F]*' | cut -d= -f2)
             local NAME=$(echo "$block" | grep -o 'Name="[^"]*"' | cut -d'"' -f2)
 
             if [ -n "$VENDOR_HEX" ] && [ -n "$PRODUCT_HEX" ] && [ -n "$NAME" ]; then
-                # Plasma vyžaduje Vendor a Product ID v desítkové soustavě (převod z hex)
                 local VENDOR_DEC=$((16#$VENDOR_HEX))
                 local PRODUCT_DEC=$((16#$PRODUCT_HEX))
                 
-                # Zápis sekce přesně pro tento hardware
+                # Zápis sekce přesně pro tento konkrétní hardware
                 echo -e "\n[Libinput][$VENDOR_DEC][$PRODUCT_DEC][$NAME]" >> "$KCM_INPUT"
                 
-                # Pokud je v configu true, zapne obrácené scrollování
                 if [ "$REVERSE_TOUCHPAD" == "true" ]; then
                     echo "NaturalScroll=true" >> "$KCM_INPUT"
                 fi
                 
-                # ClickMethod=2 znamená proklik dvěma prsty (pokud to fyzický touchpad umí)
+                # Proklik dvěma prsty (V KDE: 1 = pravý roh, 2 = dva prsty)
                 echo "ClickMethod=2" >> "$KCM_INPUT"
+                
+                # Klepnutí na plochu touchpadu jako levý klik
+                echo "TapToClick=true" >> "$KCM_INPUT"
             fi
         done
         chown "$REAL_USER:$REAL_USER" "$KCM_INPUT" 2>/dev/null || true
 
-        # 2. NASTAVENÍ INDEXOVÁNÍ (Baloo) - Hrubá síla přímým zápisem
+        # 2. NASTAVENÍ INDEXOVÁNÍ (Baloo)
         if [ "$SET_BALOO_INDEXING" == "true" ]; then
-            log "Konfiguruji indexování souborů (Baloo)..."
+            log "Konfiguruji a aktivuji indexování souborů (Baloo)..."
             local BALOO_CONF="$USER_HOME/.config/baloofilerc"
             
+            # Hrubý zápis souboru (nyní s klíčem first run=false, aby to Plasma neanulovala)
             echo "[Basic]" > "$BALOO_CONF"
             echo "Indexing-Enabled=true" >> "$BALOO_CONF"
             echo "" >> "$BALOO_CONF"
             echo "[General]" >> "$BALOO_CONF"
+            echo "first run=false" >> "$BALOO_CONF"
             echo "exclude folders=" >> "$BALOO_CONF"
             echo "folders=$BALOO_FOLDERS" >> "$BALOO_CONF"
-            
             chown "$REAL_USER:$REAL_USER" "$BALOO_CONF" || true
+            
+            # KLÍČOVÝ KROK: Oživení démona pod identitou uživatele (bez toho GUI tvrdí, že je to vypnuté)
+            su - "$REAL_USER" -c "balooctl6 enable 2>/dev/null || balooctl enable 2>/dev/null || true"
         fi
 
         # 3. ZMĚNA IKONY START MENU (Tvrdý zásah do systémové šablony Plasmy)
