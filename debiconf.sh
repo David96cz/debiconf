@@ -1604,6 +1604,43 @@ configure_plasma() {
     # Uspořádání horní lišty: Jméno PC, mezera, hodiny, mezera, výběr relace, vypínací tlačítko
     sudo bash -c 'echo "indicators = ~host;~spacer;~clock;~spacer;~session;~power" >> /etc/lightdm/lightdm-gtk-greeter.conf'
 
+    log "Připravuji jednorázový skript pro nastavení výchozí tapety..."
+    
+    local USER_BIN="/home/$REAL_USER/.local/bin"
+    local AUTOSTART_DIR="/home/$REAL_USER/.config/autostart"
+
+    sudo -u "$REAL_USER" mkdir -p "$USER_BIN" "$AUTOSTART_DIR"
+
+    # 1. Tvorba kamikadze skriptu pro tapetu
+    echo "#!/bin/bash" > "$USER_BIN/set-wallpaper.sh"
+    echo "sleep 5" >> "$USER_BIN/set-wallpaper.sh" # Počká na nastartování Plasmy
+    echo "qdbus org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript '" >> "$USER_BIN/set-wallpaper.sh"
+    echo "    var allDesktops = desktops();" >> "$USER_BIN/set-wallpaper.sh"
+    echo "    for (i=0;i<allDesktops.length;i++) {" >> "$USER_BIN/set-wallpaper.sh"
+    echo "        d = allDesktops[i];" >> "$USER_BIN/set-wallpaper.sh"
+    echo "        d.wallpaperPlugin = \"org.kde.image\";" >> "$USER_BIN/set-wallpaper.sh"
+    echo "        d.currentConfigGroup = Array(\"Wallpaper\", \"org.kde.image\", \"General\");" >> "$USER_BIN/set-wallpaper.sh"
+    echo "        d.writeConfig(\"Image\", \"file:///usr/share/desktop-base/active-theme/login/background.svg\");" >> "$USER_BIN/set-wallpaper.sh"
+    echo "    }" >> "$USER_BIN/set-wallpaper.sh"
+    echo "'" >> "$USER_BIN/set-wallpaper.sh"
+    # Skript smaže spouštěč i sám sebe
+    echo "rm -f \"$AUTOSTART_DIR/set-wallpaper.desktop\"" >> "$USER_BIN/set-wallpaper.sh"
+    echo "rm -f \"\$0\"" >> "$USER_BIN/set-wallpaper.sh"
+
+    chmod +x "$USER_BIN/set-wallpaper.sh"
+
+    # 2. Vytvoření spouštěče do Autostartu
+    echo "[Desktop Entry]" > "$AUTOSTART_DIR/set-wallpaper.desktop"
+    echo "Type=Application" >> "$AUTOSTART_DIR/set-wallpaper.desktop"
+    echo "Exec=$USER_BIN/set-wallpaper.sh" >> "$AUTOSTART_DIR/set-wallpaper.desktop"
+    echo "Hidden=false" >> "$AUTOSTART_DIR/set-wallpaper.desktop"
+    echo "NoDisplay=false" >> "$AUTOSTART_DIR/set-wallpaper.desktop"
+    echo "X-GNOME-Autostart-enabled=true" >> "$AUTOSTART_DIR/set-wallpaper.desktop"
+    echo "Name=Auto Wallpaper Setup" >> "$AUTOSTART_DIR/set-wallpaper.desktop"
+
+    # Sjednocení práv
+    chown -R "$REAL_USER:$REAL_USER" "$USER_BIN" "$AUTOSTART_DIR"
+
     # ==========================================================
     # PARSOVÁNÍ CONFIGU A APLIKACE DYNAMICKÝCH PRAVIDEL
     # ==========================================================
@@ -1751,6 +1788,36 @@ configure_plasma() {
             run_as_user "kwriteconfig6 --file ksplashrc --group KSplash --key Engine none 2>/dev/null || kwriteconfig5 --file ksplashrc --group KSplash --key Engine none 2>/dev/null"
             run_as_user "kwriteconfig6 --file ksplashrc --group KSplash --key Theme None 2>/dev/null || kwriteconfig5 --file ksplashrc --group KSplash --key Theme None 2>/dev/null"
         fi
+
+                log "Nasazuji DBus fix pro zamykání Start menu přes LightDM..."
+        
+        local USER_BIN="/home/$REAL_USER/.local/bin"
+        local AUTOSTART_DIR="/home/$REAL_USER/.config/autostart"
+
+        # Vytvoření složek pod právy uživatele
+        sudo -u "$REAL_USER" mkdir -p "$USER_BIN" "$AUTOSTART_DIR"
+
+        # 1. Zápis samotného skriptu (Escapujeme znaky, aby to bash sežral čistě)
+        echo "#!/bin/bash" > "$USER_BIN/lock-fix.sh"
+        echo "dbus-monitor --session \"type='signal',interface='org.freedesktop.ScreenSaver'\" | while read x; do" >> "$USER_BIN/lock-fix.sh"
+        echo "  if echo \"\$x\" | grep -q \"boolean true\"; then" >> "$USER_BIN/lock-fix.sh"
+        echo "    dm-tool lock" >> "$USER_BIN/lock-fix.sh"
+        echo "  fi" >> "$USER_BIN/lock-fix.sh"
+        echo "done" >> "$USER_BIN/lock-fix.sh"
+
+        # 2. Zápis autostart souboru
+        echo "[Desktop Entry]" > "$AUTOSTART_DIR/lock-fix.desktop"
+        echo "Type=Application" >> "$AUTOSTART_DIR/lock-fix.desktop"
+        echo "Exec=$USER_BIN/lock-fix.sh" >> "$AUTOSTART_DIR/lock-fix.desktop"
+        echo "Hidden=false" >> "$AUTOSTART_DIR/lock-fix.desktop"
+        echo "NoDisplay=false" >> "$AUTOSTART_DIR/lock-fix.desktop"
+        echo "X-GNOME-Autostart-enabled=true" >> "$AUTOSTART_DIR/lock-fix.desktop"
+        echo "Name=LightDM Lock Fix" >> "$AUTOSTART_DIR/lock-fix.desktop"
+        echo "Comment=Přesměrování nativního KDE zamykání na dm-tool" >> "$AUTOSTART_DIR/lock-fix.desktop"
+
+        # 3. Nastavení práv a vlastnictví
+        chmod +x "$USER_BIN/lock-fix.sh"
+        chown -R "$REAL_USER:$REAL_USER" "$USER_BIN" "$AUTOSTART_DIR"
     fi
     
 }
