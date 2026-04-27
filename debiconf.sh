@@ -1589,7 +1589,7 @@ configure_plasma() {
 
     chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config" || true
 
-    # ==========================================================
+        # ==========================================================
     # PARSOVÁNÍ CONFIGU A APLIKACE DYNAMICKÝCH PRAVIDEL
     # ==========================================================
     local PLASMA_CONF="$CONTENTS_DIR/plasma/config.txt"
@@ -1597,44 +1597,62 @@ configure_plasma() {
     if [ -f "$PLASMA_CONF" ]; then
         log "Čtu dodatečnou konfiguraci z $PLASMA_CONF..."
         
-        # Vytáhnutí hodnot pomocí sed a grep
+        # Vytáhnutí hodnot
         local SET_BALOO_INDEXING=$(sed -n '/^\[CONFIG\]/,/^\[/p' "$PLASMA_CONF" | grep "^SET_BALOO_INDEXING=" | cut -d= -f2 | tr -d '\r')
         local BALOO_FOLDERS=$(sed -n '/^\[CONFIG\]/,/^\[/p' "$PLASMA_CONF" | grep "^BALOO_FOLDERS=" | cut -d= -f2 | tr -d '\r' | sed "s/\$REAL_USER/$REAL_USER/g")
         local START_MENU_ICON=$(sed -n '/^\[CONFIG\]/,/^\[/p' "$PLASMA_CONF" | grep "^START_MENU_ICON=" | cut -d= -f2 | tr -d '\r')
         local REVERSE_TOUCHPAD=$(sed -n '/^\[CONFIG\]/,/^\[/p' "$PLASMA_CONF" | grep "^REVERSE_TOUCHPAD=" | cut -d= -f2 | tr -d '\r')
 
-        # 1. NASTAVENÍ TOUCHPADU (Globální X11 pravidlo)
-        if [ "$REVERSE_TOUCHPAD" == "true" ]; then
-            log "Nastavuji přirozené (obrácené) posouvání pro touchpady..."
-            mkdir -p /etc/X11/xorg.conf.d
-            echo 'Section "InputClass"' > /etc/X11/xorg.conf.d/40-libinput-touchpad.conf
-            echo '    Identifier "libinput touchpad catchall"' >> /etc/X11/xorg.conf.d/40-libinput-touchpad.conf
-            echo '    MatchIsTouchpad "on"' >> /etc/X11/xorg.conf.d/40-libinput-touchpad.conf
-            echo '    MatchDevicePath "/dev/input/event*"' >> /etc/X11/xorg.conf.d/40-libinput-touchpad.conf
-            echo '    Driver "libinput"' >> /etc/X11/xorg.conf.d/40-libinput-touchpad.conf
-            echo '    Option "NaturalScrolling" "true"' >> /etc/X11/xorg.conf.d/40-libinput-touchpad.conf
-            echo 'EndSection' >> /etc/X11/xorg.conf.d/40-libinput-touchpad.conf
-        fi
+        # 1. NASTAVENÍ TOUCHPADU (Nativní konfigurace Plasmy pro Wayland)
+        log "Detekuji touchpady pro nastavení scrollování a prokliku dvěma prsty..."
+        local KCM_INPUT="$USER_HOME/.config/kcminputrc"
+        
+        # Skript "osahá" jádro a najde všechny připojené touchpady
+        awk -v RS='' '/Touch[Pp]ad|ALPS|Elan|FocalTech/' /proc/bus/input/devices | while read -r block; do
+            local VENDOR_HEX=$(echo "$block" | grep -o 'Vendor=[0-9a-fA-F]*' | cut -d= -f2)
+            local PRODUCT_HEX=$(echo "$block" | grep -o 'Product=[0-9a-fA-F]*' | cut -d= -f2)
+            local NAME=$(echo "$block" | grep -o 'Name="[^"]*"' | cut -d'"' -f2)
 
-        # 2. NASTAVENÍ INDEXOVÁNÍ (Baloo)
+            if [ -n "$VENDOR_HEX" ] && [ -n "$PRODUCT_HEX" ] && [ -n "$NAME" ]; then
+                # Plasma vyžaduje Vendor a Product ID v desítkové soustavě (převod z hex)
+                local VENDOR_DEC=$((16#$VENDOR_HEX))
+                local PRODUCT_DEC=$((16#$PRODUCT_HEX))
+                
+                # Zápis sekce přesně pro tento hardware
+                echo -e "\n[Libinput][$VENDOR_DEC][$PRODUCT_DEC][$NAME]" >> "$KCM_INPUT"
+                
+                # Pokud je v configu true, zapne obrácené scrollování
+                if [ "$REVERSE_TOUCHPAD" == "true" ]; then
+                    echo "NaturalScroll=true" >> "$KCM_INPUT"
+                fi
+                
+                # ClickMethod=2 znamená proklik dvěma prsty (pokud to fyzický touchpad umí)
+                echo "ClickMethod=2" >> "$KCM_INPUT"
+            fi
+        done
+        chown "$REAL_USER:$REAL_USER" "$KCM_INPUT" 2>/dev/null || true
+
+        # 2. NASTAVENÍ INDEXOVÁNÍ (Baloo) - Hrubá síla přímým zápisem
         if [ "$SET_BALOO_INDEXING" == "true" ]; then
             log "Konfiguruji indexování souborů (Baloo)..."
-            # KWriteConfig bezpečně vytvoří/upraví soubor i když Plasma neběží
-            run_as_user "kwriteconfig6 --file baloofilerc --group 'Basic' --key 'Indexing-Enabled' true 2>/dev/null || kwriteconfig5 --file baloofilerc --group 'Basic' --key 'Indexing-Enabled' true 2>/dev/null"
-            run_as_user "kwriteconfig6 --file baloofilerc --group 'General' --key 'folders' \"$BALOO_FOLDERS\" 2>/dev/null || kwriteconfig5 --file baloofilerc --group 'General' --key 'folders' \"$BALOO_FOLDERS\" 2>/dev/null"
-            run_as_user "kwriteconfig6 --file baloofilerc --group 'General' --key 'exclude folders' \"\" 2>/dev/null || kwriteconfig5 --file baloofilerc --group 'General' --key 'exclude folders' \"\" 2>/dev/null"
+            local BALOO_CONF="$USER_HOME/.config/baloofilerc"
+            
+            echo "[Basic]" > "$BALOO_CONF"
+            echo "Indexing-Enabled=true" >> "$BALOO_CONF"
+            echo "" >> "$BALOO_CONF"
+            echo "[General]" >> "$BALOO_CONF"
+            echo "exclude folders=" >> "$BALOO_CONF"
+            echo "folders=$BALOO_FOLDERS" >> "$BALOO_CONF"
+            
+            chown "$REAL_USER:$REAL_USER" "$BALOO_CONF" || true
         fi
 
         # 3. ZMĚNA IKONY START MENU (Tvrdý zásah do systémové šablony Plasmy)
         if [ -n "$START_MENU_ICON" ]; then
             log "Zapisuji ikonu menu natvrdo do systémových XML šablon Plasmy..."
-            
-            # Projdeme všechny tři typy menu, které Plasma umí (Kickoff, Kicker, Dash)
             for plasmoid in kickoff kicker dash; do
                 local XML_FILE="/usr/share/plasma/plasmoids/org.kde.plasma.$plasmoid/contents/config/main.xml"
-                
                 if [ -f "$XML_FILE" ]; then
-                    # Najde blok definující ikonu a přepíše jeho <default> hodnotu na tvou z configu
                     sed -i "/<entry name=\"icon\"/,/<\/entry>/ s|<default>.*</default>|<default>$START_MENU_ICON</default>|" "$XML_FILE" || true
                 fi
             done
