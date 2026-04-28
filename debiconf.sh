@@ -470,6 +470,26 @@ lxqt_setup_apps_and_defaults() {
 }
 
 prepare_system() {
+        log "Skrývám GRUB načítání při startu počítače..."
+
+    # Odstranění pozadí
+    sudo sed -i '/GRUB_BACKGROUND/d' /etc/default/grub
+    
+    # Nastavení absolutního ticha (bez menu a prodlevy)
+    sudo sed -i 's/GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub
+    if ! grep -q "GRUB_TIMEOUT_STYLE=hidden" /etc/default/grub; then
+        echo "GRUB_TIMEOUT_STYLE=hidden" | sudo tee -a /etc/default/grub
+    fi
+    sudo sed -i 's/#GRUB_TERMINAL=console/GRUB_TERMINAL=console/' /etc/default/grub
+
+    # BEZPEČNÉ PŘIDÁNÍ PARAMETRŮ (Zanechá Bay Trail i AMD fixy netknuté!)
+    for param in quiet splash loglevel=3 rd.systemd.show_status=false vga=current; do
+        sudo sed -i -e "/^GRUB_CMDLINE_LINUX_DEFAULT=/ { /$param/! s/\"$/ $param\"/ }" /etc/default/grub
+    done
+
+    # Propis změn do systému
+    sudo update-grub
+
     log "Vypínám otravný systémový PC speaker (pípání)..."
     echo -e "blacklist pcspkr\nblacklist snd_pcsp" > /etc/modprobe.d/nobeep.conf
 
@@ -1799,12 +1819,16 @@ configure_plasma() {
         local DISABLE_SPLASH=$(sed -n '/^\[CONFIG\]/,/^\[/p' "$PLASMA_CONF" | grep "^DISABLE_SPLASH_SCREEN=" | cut -d= -f2 | tr -d '\r')
         
         if [ "$DISABLE_SPLASH" == "true" ]; then
-            log "Vypínám načítací obrazovku (Splash Screen) pro rychlý start..."
-            run_as_user "kwriteconfig6 --file ksplashrc --group KSplash --key Engine none 2>/dev/null || kwriteconfig5 --file ksplashrc --group KSplash --key Engine none 2>/dev/null"
+            log "Vypínám Splash Screen (VAROVÁNÍ: Plocha bude doskakovat na černé obrazovce)..."
+            run_as_user "kwriteconfig6 --file ksplashrc --group KSplash --key Engine None 2>/dev/null || kwriteconfig5 --file ksplashrc --group KSplash --key Engine None 2>/dev/null"
             run_as_user "kwriteconfig6 --file ksplashrc --group KSplash --key Theme None 2>/dev/null || kwriteconfig5 --file ksplashrc --group KSplash --key Theme None 2>/dev/null"
+        else
+            log "Ponechávám výchozí Splash Screen (KDE Breeze) pro čisté prolnutí do hotové plochy..."
+            run_as_user "kwriteconfig6 --file ksplashrc --group KSplash --key Engine KSplashQML 2>/dev/null || kwriteconfig5 --file ksplashrc --group KSplash --key Engine KSplashQML 2>/dev/null"
+            run_as_user "kwriteconfig6 --file ksplashrc --group KSplash --key Theme org.kde.breeze.desktop 2>/dev/null || kwriteconfig5 --file ksplashrc --group KSplash --key Theme org.kde.breeze.desktop 2>/dev/null"
         fi
 
-                log "Nasazuji DBus fix pro zamykání Start menu přes LightDM..."
+        log "Nasazuji DBus fix pro zamykání Start menu přes LightDM..."
         
         local USER_BIN="/home/$REAL_USER/.local/bin"
         local AUTOSTART_DIR="/home/$REAL_USER/.config/autostart"
@@ -1878,7 +1902,7 @@ setup_display_manager() {
     else
         log "Aplikuji výchozí modrý motiv pro LightDM (LXQt)..."
         echo "[greeter]" > "$GREETER_CONF"
-        echo "background = /usr/share/lxqt/wallpapers/simple_blue_widescreen.png" >> "$GREETER_CONF"
+        echo "background = /usr/share/backgrounds/wallpaper.png" >> "$GREETER_CONF"
         
         # Vynucení výchozí relace na LXQt pro manuální přihlášení
         echo "[Seat:*]" > /etc/lightdm/lightdm.conf.d/50-session.conf
