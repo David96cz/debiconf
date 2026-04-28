@@ -1885,7 +1885,6 @@ configure_plasma() {
         # chmod +x "$USER_BIN/lock-fix.sh"
         # chown -R "$REAL_USER:$REAL_USER" "$USER_BIN" "$AUTOSTART_DIR"
     fi
-    
 }
 
 # === 4. SYSTÉMOVÉ SLUŽBY A BOOT ===
@@ -1915,7 +1914,7 @@ setup_display_manager() {
     mkdir -p /etc/lightdm/lightdm.conf.d
     
     if [ "$DESKTOP_ENV" == "PLASMA" ]; then
-        log "Aplikuji motiv Breeze pro LightDM (KDE Plasma)..."
+        log "Aplikuji motiv Breeze pro SDDM a LightDM (KDE Plasma)..."
         echo "[greeter]" > "$GREETER_CONF"
         echo "theme-name = Breeze" >> "$GREETER_CONF"
         echo "icon-theme-name = breeze" >> "$GREETER_CONF"
@@ -1926,6 +1925,17 @@ setup_display_manager() {
         # Vynucení výchozí relace na Plasma Wayland pro manuální přihlášení
         echo "[Seat:*]" > /etc/lightdm/lightdm.conf.d/50-session.conf
         echo "user-session=plasmawayland" >> /etc/lightdm/lightdm.conf.d/50-session.conf
+
+        # 1. Vynucení čistého motivu Breeze (pro jistotu, kdyby se Debian snažil cpát svůj)
+        sudo mkdir -p /etc/sddm.conf.d
+        echo "[Theme]" | sudo tee /etc/sddm.conf.d/10-theme.conf > /dev/null
+        echo "Current=breeze" | sudo tee -a /etc/sddm.conf.d/10-theme.conf > /dev/null
+
+        # 2. Vytvoření uživatelského configu motivu, který natvrdo přepíše tapetu
+        sudo touch /usr/share/sddm/themes/breeze/theme.conf.user
+        echo "[General]" | sudo tee /usr/share/sddm/themes/breeze/theme.conf.user > /dev/null
+        echo "type=image" | sudo tee -a /usr/share/sddm/themes/breeze/theme.conf.user > /dev/null
+        echo "background=/usr/share/backgrounds/wallpaper.png" | sudo tee -a /usr/share/sddm/themes/breeze/theme.conf.user > /dev/null
     else
         log "Aplikuji výchozí modrý motiv pro LightDM (LXQt)..."
         echo "[greeter]" > "$GREETER_CONF"
