@@ -1616,6 +1616,29 @@ configure_plasma() {
 
     sudo -u "$REAL_USER" mkdir -p "$USER_BIN" "$AUTOSTART_DIR"
 
+    log "Aplikuji automatický fix pro LightDM a Wayland..."
+
+    # 1. Vytvoření neviditelného štítu pomocí echo
+    echo '#!/bin/bash' > /usr/local/bin/plasma-lightdm-fix.sh
+    echo 'export XDG_SESSION_TYPE=wayland' >> /usr/local/bin/plasma-lightdm-fix.sh
+    echo 'export XDG_SESSION_DESKTOP=KDE' >> /usr/local/bin/plasma-lightdm-fix.sh
+    echo 'export XDG_CURRENT_DESKTOP=KDE' >> /usr/local/bin/plasma-lightdm-fix.sh
+    echo 'unset DISPLAY' >> /usr/local/bin/plasma-lightdm-fix.sh
+    echo 'unset XAUTHORITY' >> /usr/local/bin/plasma-lightdm-fix.sh
+    echo 'exec dbus-run-session startplasma-wayland' >> /usr/local/bin/plasma-lightdm-fix.sh
+
+    chmod +x /usr/local/bin/plasma-lightdm-fix.sh
+
+    # 2. Únos všech výchozích Plasma relací
+    for desktop_file in /usr/share/wayland-sessions/plasma*.desktop /usr/share/xsessions/plasma*.desktop; do
+        if [ -f "$desktop_file" ]; then
+            sed -i 's|^Exec=.*|Exec=/usr/local/bin/plasma-lightdm-fix.sh|' "$desktop_file"
+        fi
+    done
+
+    # 3. Úklid případných zbytků
+    rm -f /usr/share/wayland-sessions/custom-wayland.desktop 2>/dev/null
+
     # 1. Tvorba kamikadze skriptu pro tapetu
     echo "#!/bin/bash" > "$USER_BIN/set-wallpaper.sh"
     
