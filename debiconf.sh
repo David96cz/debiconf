@@ -1616,9 +1616,9 @@ configure_plasma() {
 
     sudo -u "$REAL_USER" mkdir -p "$USER_BIN" "$AUTOSTART_DIR"
 
-    log "Aplikuji čistý fix pro LightDM a Wayland..."
+    log "Aplikuji čistý fix pro LightDM a Wayland (zachování nativních relací)..."
 
-    # 1. Vytvoření neviditelného štítu přes echo (s kompletním pročištěním D-Busu)
+    # 1. Vytvoření neviditelného štítu
     echo '#!/bin/bash' > /usr/local/bin/plasma-lightdm-fix.sh
     echo 'export XDG_SESSION_TYPE=wayland' >> /usr/local/bin/plasma-lightdm-fix.sh
     echo 'export XDG_SESSION_DESKTOP=KDE' >> /usr/local/bin/plasma-lightdm-fix.sh
@@ -1630,14 +1630,23 @@ configure_plasma() {
 
     chmod +x /usr/local/bin/plasma-lightdm-fix.sh
 
-    # 2. Únos POUZE Wayland relací (nikoliv xsessions, ty nesmíme patlat!)
+    # 2. Únos pouze nativních Wayland relací (zachová oficiální jména i překlady)
     for desktop_file in /usr/share/wayland-sessions/plasma*.desktop; do
         if [ -f "$desktop_file" ]; then
             sed -i 's|^Exec=.*|Exec=/usr/local/bin/plasma-lightdm-fix.sh|' "$desktop_file"
         fi
     done
 
-    # 3. Úklid
+    # 3. Nalezení přesného jména originální relace a donucení LightDM, aby ji použil jako výchozí
+    mkdir -p /etc/lightdm/lightdm.conf.d
+
+    # Zjistí název původní relace bez .desktop (např. "plasmawayland" nebo "plasma")
+    DEFAULT_SESSION=$(basename $(ls /usr/share/wayland-sessions/plasma*.desktop | head -n 1) .desktop)
+
+    echo '[Seat:*]' > /etc/lightdm/lightdm.conf.d/50-wayland-default.conf
+    echo "user-session=$DEFAULT_SESSION" >> /etc/lightdm/lightdm.conf.d/50-wayland-default.conf
+
+    # 4. Úklid jakýchkoliv předchozích pokusů, pokud existují
     rm -f /usr/share/wayland-sessions/custom-wayland.desktop 2>/dev/null
 
     # 1. Tvorba kamikadze skriptu pro tapetu
