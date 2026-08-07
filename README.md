@@ -1,11 +1,9 @@
 # Debiconf
 Zprovoznění desktopového prostředí bez bloatwaru na čistém Debianu
 
-Debian 13.4.0
+Odkaz ke stažení Debianu
 
-AMD64: http://debian-cd.mirror.web4u.cz/13.4.0/amd64/iso-cd/debian-13.4.0-amd64-netinst.iso
-
-ARM64: http://debian-cd.mirror.web4u.cz/13.4.0/arm64/iso-cd/debian-13.4.0-arm64-netinst.iso
+https://ftp.linux.cz/pub/linux/debian-cd/
 
 --------------------------------------------------
 **!! INSTALOVAT VÝHRADNĚ BEZ DESKTOPOVÉHO PROSTŘEDÍ BĚHEM INSTALACE SAMOTNÉHO SYSTÉMU - ZDE PONECHAT POUZE "STANDARDNÍ SYSTÉMOVÉ NÁSTROJE" !!**
