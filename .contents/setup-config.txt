@@ -6,7 +6,7 @@ CONFIRM_LOGOUT=FALSE
 [INSTALL]
 # 1. Základní systém a hardware
 xorg network-manager upower bluez unzip zip p7zip-full zram-tools unattended-upgrades
-# 2. Neprůstřelný tisk a síťové skenování (vyřešeno navždy)
-cups cups-client cups-bsd cups-filters ghostscript poppler-utils cups-ipp-utils avahi-daemon avahi-utils libnss-mdns system-config-printer printer-driver-all foomatic-db-compressed-ppds
+# 2. Neprůstřelný tisk a síťové skenování
+simple-scan sane-utils ipp-usb sane-airscan cups cups-client cups-bsd cups-filters ghostscript poppler-utils cups-ipp-utils avahi-daemon avahi-utils libnss-mdns system-config-printer printer-driver-all foomatic-db-compressed-ppds
 # 3. Společné aplikace
 qps vlc featherpad okular

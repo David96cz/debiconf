@@ -5,7 +5,7 @@ import subprocess
 import ctypes
 
 # --- NASTAVENÍ ---
-TIMEOUT = 10           # Maximální čas čekání (pojistka)
+TIMEOUT = 5           # Maximální čas čekání (pojistka)
 POLL_INTERVAL = 0.25   # Jak často kontrolovat (vteřiny)
 
 # Kurzor: left_ptr_watch (šipka s hodinkami)

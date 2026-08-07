@@ -60,3 +60,4 @@ shortcut-manager.desktop
 albert.desktop
 org.flameshot.Flameshot.desktop
 vim.desktop
+peazip.desktop
