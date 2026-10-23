@@ -1067,10 +1067,10 @@ lxqt_setup_appearance() {
         
         if [ -n "$B_NAME" ]; then
             # Pokud je prohlížeč: 1. Hledání, 2. PCManFM, 3. Prohlížeč (size=3)
-            sed -i "/^\[quicklaunch\]/a apps\\\\1\\\\desktop=$SEARCH_DESKTOP\napps\\\\2\\\\desktop=$LOCAL_APPS/pcmanfm-qt.desktop\napps\\\\3\\\\desktop=$LOCAL_APPS/$B_NAME\napps\\\\size=3" "$PANEL_CONF" || true
+            sed -i "/^\[quicklaunch\]/a apps\\\\1\\\\desktop=$SEARCH_DESKTOP\napps\\\\2\\\\desktop=$LOCAL_APPS/thunar.desktop\napps\\\\3\\\\desktop=$LOCAL_APPS/$B_NAME\napps\\\\size=3" "$PANEL_CONF" || true
         else
             # Pokud není prohlížeč: 1. Hledání, 2. PCManFM (size=2)
-            sed -i "/^\[quicklaunch\]/a apps\\\\1\\\\desktop=$SEARCH_DESKTOP\napps\\\\2\\\\desktop=$LOCAL_APPS/pcmanfm-qt.desktop\napps\\\\size=2" "$PANEL_CONF" || true
+            sed -i "/^\[quicklaunch\]/a apps\\\\1\\\\desktop=$SEARCH_DESKTOP\napps\\\\2\\\\desktop=$LOCAL_APPS/thunar.desktop\napps\\\\size=2" "$PANEL_CONF" || true
         fi
     fi
 }
