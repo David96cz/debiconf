@@ -1034,7 +1034,8 @@ lxqt_setup_appearance() {
     chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config/lxqt" || true
     
     # --- KONEC NOVÉ ČÁSTI ---
-    # 2. XFWM4 Session
+    
+    # 2. XFWM4 Session - Dynamické čtení ze zdrojového xfwm.conf
     local SESSION_CONF="$USER_HOME/.config/lxqt/session.conf"
     if [ ! -f "$SESSION_CONF" ]; then
         echo -e "[General]\nwindow_manager=xfwm4" > "$SESSION_CONF"
@@ -1043,19 +1044,26 @@ lxqt_setup_appearance() {
         grep -q "^window_manager=" "$SESSION_CONF" || sed -i '/^\[General\]/a window_manager=xfwm4' "$SESSION_CONF" || true
     fi
 
-    # ZÁCHRANA PRÁV: Zabezpečenie, že celá .config zložka patrí užívateľovi (inak všetko ostatné zlyhá)
+    # ZÁCHRANA PRÁV: Zabezpečení, že celá .config složka patří uživateli
     chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config" 2>/dev/null || true
 
     local XFWM_SRC="$CONTENTS_DIR/lxqt/config/xfwm.conf"
     if [ -f "$XFWM_SRC" ]; then
         cp "$XFWM_SRC" /tmp/xfwm-apply.sh
         chown "$REAL_USER:$REAL_USER" /tmp/xfwm-apply.sh
+        
+        # Složky pro uložení výsledného XML musí existovat
         mkdir -p "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
         chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config/xfce4"
-        # Falošný X11 server (xvfb) oklame xfconf-query, aby nespadol na D-Bus chybe
-        su "$REAL_USER" -c "xvfb-run -a dbus-run-session bash -c 'bash /tmp/xfwm-apply.sh; sleep 2'" || true
+        
+        # SPUŠTĚNÍ A VYNUCENÝ ZÁPIS NA DISK:
+        # Spustí tvůj config, následně korektně ukončí xfconfd (což spustí zápis na disk)
+        # a počká 2 vteřiny, než se celá D-Bus relace rozpadne.
+        su "$REAL_USER" -c "xvfb-run -a dbus-run-session bash -c 'bash /tmp/xfwm-apply.sh; killall -15 xfconfd 2>/dev/null; sleep 2'" || true
+        
         rm -f /tmp/xfwm-apply.sh
     fi
+
 
     # 1. Konfigurace GTK-3 pro Thunar a systém (ikony Papirus, Adwaita, světlý režim)
     sudo -u "$REAL_USER" mkdir -p "$USER_HOME/.config/gtk-3.0"
