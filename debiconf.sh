@@ -994,80 +994,111 @@ lxqt_setup_appearance() {
         chown "$REAL_USER:$REAL_USER" "$THEME_DIR/lxqt-panel.qss" || true
     fi
 
-    # C) Nasazení předpřipravených konfigurací (Vzhled a GTK lock)
+        log "--- START: Nasazení předpřipravených konfigurací (Vzhled a GTK lock) ---"
     export DISPLAY="${DISPLAY:-:0}"
     export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
 
     local APP_CONF_SRC="$CONTENTS_DIR/lxqt/config/lxqt-config-appearance.conf"
     local LXQT_CONF_DIR="$USER_HOME/.config/lxqt"
-    mkdir -p "$LXQT_CONF_DIR"
+    
+    log "Vytvářím složku $LXQT_CONF_DIR..."
+    mkdir -p "$LXQT_CONF_DIR" || log "CHYBA: Nelze vytvořit složku $LXQT_CONF_DIR!"
     
     if [ -f "$APP_CONF_SRC" ]; then
-        log "Kopiruji lxqt-config-appearance.conf (GTK lock)..."
-        cp "$APP_CONF_SRC" "$LXQT_CONF_DIR/" || true
+        log "Kopíruji lxqt-config-appearance.conf (GTK lock)..."
+        cp "$APP_CONF_SRC" "$LXQT_CONF_DIR/" || log "CHYBA: Kopírování $APP_CONF_SRC selhalo!"
+    else
+        log "VAROVÁNÍ: $APP_CONF_SRC nebyl nalezen, přeskakuji kopírování."
     fi
     
     # D) Ošetření konfigurace panelu (Uzamčení panelu na Papirus-Dark)
+    log "Zahajuji ošetření panel.conf (uzamčení na Papirus-Dark)..."
     local PANEL_CONF="$LXQT_CONF_DIR/panel.conf"
     if [ -f "$PANEL_CONF" ]; then
-        # Smaže jakýkoliv předchozí iconTheme a práskne tam natvrdo ten Dark
-        sed -i '/^iconTheme=/d' "$PANEL_CONF" || true
-        sed -i '/^\[General\]/a iconTheme=Papirus-Dark' "$PANEL_CONF" || true
+        sed -i '/^iconTheme=/d' "$PANEL_CONF" || log "VAROVÁNÍ: Smazání starého iconTheme selhalo (nebo tam nebylo)."
+        sed -i '/^\[General\]/a iconTheme=Papirus-Dark' "$PANEL_CONF" || log "CHYBA: Zápis Papirus-Dark do panel.conf selhal!"
+    else
+        log "VAROVÁNÍ: $PANEL_CONF neexistuje, přeskočeno."
     fi
 
-    # E) Fix pro CopyQ (Pokud se nepoužívá předpřipravený copyq.conf)
+    # E) Fix pro CopyQ
+    log "Zahajuji fix pro CopyQ..."
     local COPYQ_CONF="$USER_HOME/.config/copyq/copyq.conf"
     if [ -f "$COPYQ_CONF" ]; then
-        sed -i 's/use_system_icons=false/use_system_icons=true/' "$COPYQ_CONF" || true
+        sed -i 's/use_system_icons=false/use_system_icons=true/' "$COPYQ_CONF" || log "VAROVÁNÍ: Fix CopyQ selhal!"
+    else
+        log "INFO: copyq.conf nenalezen, přeskočeno."
     fi
 
-    # Oprava práv pro jistotu (když skript běží pod rootem)
-    chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config/lxqt" || true
+    log "Opravuji práva pro $USER_HOME/.config/lxqt..."
+    chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config/lxqt" || log "CHYBA: Chown na lxqt config selhal!"
     
     # --- KONEC NOVÉ ČÁSTI ---
 
     # 2. XFWM4 Session
+    log "Zahajuji nastavení XFWM4 Session..."
     local SESSION_CONF="$USER_HOME/.config/lxqt/session.conf"
     if [ ! -f "$SESSION_CONF" ]; then
-        echo -e "[General]\nwindow_manager=xfwm4" > "$SESSION_CONF"
+        log "Vytvářím nový session.conf s window_manager=xfwm4..."
+        echo -e "[General]\nwindow_manager=xfwm4" > "$SESSION_CONF" || log "CHYBA: Zápis do session.conf selhal!"
     else
-        sed -i 's/^window_manager=.*/window_manager=xfwm4/' "$SESSION_CONF" || true
-        grep -q "^window_manager=" "$SESSION_CONF" || sed -i '/^\[General\]/a window_manager=xfwm4' "$SESSION_CONF" || true
+        log "Upravuji existující session.conf..."
+        sed -i 's/^window_manager=.*/window_manager=xfwm4/' "$SESSION_CONF" || log "VAROVÁNÍ: Nahrazení window_manager selhalo."
+        grep -q "^window_manager=" "$SESSION_CONF" || sed -i '/^\[General\]/a window_manager=xfwm4' "$SESSION_CONF" || log "CHYBA: Přidání window_manager selhalo."
     fi
 
     local XFWM_SRC="$CONTENTS_DIR/lxqt/config/xfwm.conf"
     if [ -f "$XFWM_SRC" ]; then
-        cp "$XFWM_SRC" /tmp/xfwm-apply.sh
-        chown "$REAL_USER:$REAL_USER" /tmp/xfwm-apply.sh
-        mkdir -p "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
-        chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config/xfce4"
-        su - "$REAL_USER" -c "dbus-run-session bash -c 'bash /tmp/xfwm-apply.sh; sleep 2'" || true
-        rm -f /tmp/xfwm-apply.sh
+        log "Příprava xfwm.conf do /tmp..."
+        cp "$XFWM_SRC" /tmp/xfwm-apply.sh || log "CHYBA: Kopírování xfwm.conf do /tmp selhalo!"
+        chown "$REAL_USER:$REAL_USER" /tmp/xfwm-apply.sh || log "VAROVÁNÍ: Chown na /tmp/xfwm-apply.sh selhal!"
+        
+        log "Příprava xfce-perchannel-xml složky..."
+        mkdir -p "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml" || log "CHYBA: Nelze vytvořit xfce4 config složku!"
+        chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config/xfce4" || log "VAROVÁNÍ: Chown na xfce4 config selhal!"
+        
+        log "Spouštím xfwm-apply.sh přes D-Bus pod uživatelem..."
+        su "$REAL_USER" -c "export DISPLAY=:0; dbus-run-session bash -c 'bash /tmp/xfwm-apply.sh; sleep 2'" || log "FATÁLNÍ CHYBA: Volání xfwm-apply.sh spadlo!"
+        rm -f /tmp/xfwm-apply.sh || log "VAROVÁNÍ: Smazání dočasného xfwm skriptu selhalo."
+    else
+        log "VAROVÁNÍ: xfwm.conf nenalezen ve zdrojích, přeskakuji XFWM config."
     fi
 
-    # Konfigurace GTK-3 pro Thunar a systém (ikony Papirus, Adwaita, světlý režim)
-    mkdir -p ~/.config/gtk-3.0 && echo -e "[Settings]\ngtk-icon-theme-name = Papirus\ngtk-theme-name = Adwaita\ngtk-application-prefer-dark-theme = false" > ~/.config/gtk-3.0/settings.ini
-
+    # Konfigurace GTK-3 pro Thunar a systém
+    log "Generuji nastavení GTK-3 (Thunar, Papirus, Adwaita)..."
+    su "$REAL_USER" -c "mkdir -p $USER_HOME/.config/gtk-3.0 && echo -e '[Settings]\ngtk-icon-theme-name = Papirus\ngtk-theme-name = Adwaita\ngtk-application-prefer-dark-theme = false' > $USER_HOME/.config/gtk-3.0/settings.ini" || log "CHYBA: Zápis do gtk-3.0/settings.ini selhal!"
 
     # Vynucení ikon Papirus přes XFCE xsettings démona
-    xfconf-query -c xsettings -p /Net/IconThemeName -s "Papirus" --create -t string
+    log "Vynucuji ikony Papirus v xsettings přes xfconf..."
+    su "$REAL_USER" -c "export DISPLAY=:0; xfconf-query -c xsettings -p /Net/IconThemeName -s 'Papirus' --create -t string" || log "CHYBA: xfconf-query pro Net/IconThemeName selhalo!"
 
     # Nastavení plochy (xfdesktop) - téma ikon a přesná viditelnost zástupců
-    xfconf-query -c xfce4-desktop -p /desktop-icons/icon-theme-name -s "Papirus" --create -t string
-    xfconf-query -c xfce4-desktop -p /desktop-icons/file-icons/show-filesystem -s false --create -t bool
-    xfconf-query -c xfce4-desktop -p /desktop-icons/file-icons/show-trash -s true --create -t bool
-    xfconf-query -c xfce4-desktop -p /desktop-icons/file-icons/show-removable -s false --create -t bool
+    log "Vynucuji ikony a viditelnost na ploše xfdesktop..."
+    su "$REAL_USER" -c "export DISPLAY=:0; xfconf-query -c xfce4-desktop -p /desktop-icons/icon-theme-name -s 'Papirus' --create -t string" || log "CHYBA: xfdesktop icon-theme-name selhalo!"
+    su "$REAL_USER" -c "export DISPLAY=:0; xfconf-query -c xfce4-desktop -p /desktop-icons/file-icons/show-filesystem -s false --create -t bool" || log "VAROVÁNÍ: xfdesktop show-filesystem selhalo!"
+    su "$REAL_USER" -c "export DISPLAY=:0; xfconf-query -c xfce4-desktop -p /desktop-icons/file-icons/show-trash -s true --create -t bool" || log "VAROVÁNÍ: xfdesktop show-trash selhalo!"
+    su "$REAL_USER" -c "export DISPLAY=:0; xfconf-query -c xfce4-desktop -p /desktop-icons/file-icons/show-removable -s false --create -t bool" || log "VAROVÁNÍ: xfdesktop show-removable selhalo!"
 
-    # Dynamické nastavení tapety pro VŠECHNY připojené monitory (přes xrandr)
-    # Tohle vyřeší ten ojeb s tím, že se monitor jmenuje pokaždé jinak
-    for MON in $(xrandr | grep " connected" | awk '{print $1}'); do
-        xfconf-query -c xfce4-desktop -p "/backdrop/screen0/monitor${MON}/workspace0/last-image" -s "/usr/share/backgrounds/wallpaper.png" --create -t string
-        xfconf-query -c xfce4-desktop -p "/backdrop/screen0/monitor${MON}/workspace0/image-style" -s 5 --create -t int
-    done
+    # Dynamické nastavení tapety pro VŠECHNY připojené monitory
+    log "Získávám seznam připojených monitorů z xrandr..."
+    MONITORS=$(su "$REAL_USER" -c "export DISPLAY=:0; xrandr | grep ' connected' | awk '{print \$1}'" 2>/dev/null)
+    
+    if [ -n "$MONITORS" ]; then
+        for MON in $MONITORS; do
+            log "Zpracovávám tapetu pro monitor: $MON"
+            su "$REAL_USER" -c "export DISPLAY=:0; xfconf-query -c xfce4-desktop -p '/backdrop/screen0/monitor${MON}/workspace0/last-image' -s '/usr/share/backgrounds/wallpaper.png' --create -t string" || log "CHYBA: Tapeta pro monitor $MON selhala!"
+            su "$REAL_USER" -c "export DISPLAY=:0; xfconf-query -c xfce4-desktop -p '/backdrop/screen0/monitor${MON}/workspace0/image-style' -s 5 --create -t int" || log "CHYBA: Styl tapety pro monitor $MON selhal!"
+        done
+    else
+        log "VAROVÁNÍ: xrandr nevrátil žádné připojené monitory!"
+    fi
 
     # Pojistka: Zapsání i do obecného klíče monitor0, kdyby něco selhalo
-    xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -s "/usr/share/backgrounds/wallpaper.png" --create -t string
-    xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/image-style -s 5 --create -t int
+    log "Nastavuji pojistku tapety pro obecný monitor0..."
+    su "$REAL_USER" -c "export DISPLAY=:0; xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -s '/usr/share/backgrounds/wallpaper.png' --create -t string" || log "VAROVÁNÍ: Pojistka last-image pro monitor0 selhala!"
+    su "$REAL_USER" -c "export DISPLAY=:0; xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/image-style -s 5 --create -t int" || log "VAROVÁNÍ: Pojistka image-style pro monitor0 selhala!"
+    
+    log "--- KONEC: Nastavení vzhledu dokončeno ---"
 
     # 3. Architektura panelu
     local CONF_SRC="$CONTENTS_DIR/lxqt/config"
