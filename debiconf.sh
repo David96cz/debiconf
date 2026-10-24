@@ -311,14 +311,23 @@ lxqt_setup_apps_and_defaults() {
 
     # Zobrazení aplikací (odstranění OnlyShowIn a NoDisplay)
     local APPS_TO_SHOW_STR=$(get_section "$LOCAL_CONFIG" "APPS_TO_SHOW")
-    read -r -a APPS_TO_SHOW <<< "$APPS_TO_SHOW_STR"
-    for app in "${APPS_TO_SHOW[@]}"; do
-        # Pokud soubor není v lokální složce, ale existuje v systému, zkopírujeme ho
-        [ ! -f "$LOCAL_APPS/$app" ] && [ -f "/usr/share/applications/$app" ] && cp "/usr/share/applications/$app" "$LOCAL_APPS/$app"
+    
+    # while cyklus zaručí, že se přečtou VŠECHNY řádky, ne jen ten první
+    while read -r app; do
+        # Přeskočení prázdných řádků (kdyby byly v configu mezery)
+        [ -z "$app" ] && continue
         
-        # Smazání řádků OnlyShowIn, NotShowIn a případného NoDisplay
-        [ -f "$LOCAL_APPS/$app" ] && sed -i '/^OnlyShowIn=/d; /^NotShowIn=/d; /^NoDisplay=/d' "$LOCAL_APPS/$app" || true
-    done
+        # Pokud soubor není u uživatele, ale v systému je, zkopíruje se a hned se mu srovnají práva
+        if [ ! -f "$LOCAL_APPS/$app" ] && [ -f "/usr/share/applications/$app" ]; then
+            cp "/usr/share/applications/$app" "$LOCAL_APPS/$app"
+            chown "$REAL_USER:$REAL_USER" "$LOCAL_APPS/$app"
+        fi
+        
+        # Ostré smazání blokujících řádků
+        if [ -f "$LOCAL_APPS/$app" ]; then
+            sed -i '/^OnlyShowIn=/d; /^NotShowIn=/d; /^NoDisplay=/d' "$LOCAL_APPS/$app" || true
+        fi
+    done <<< "$APPS_TO_SHOW_STR"
 
     # --- IDENTIFIKACE A UMLČENÍ ZVOLENÉHO PROHLÍŽEČE ---
     local BROWSER_DESKTOP=""
