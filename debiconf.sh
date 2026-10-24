@@ -309,7 +309,7 @@ lxqt_setup_apps_and_defaults() {
         [ -f "$LOCAL_APPS/$app" ] && sed -i '/^NoDisplay=/d; $ a NoDisplay=true' "$LOCAL_APPS/$app" || true
     done
 
-        # === [APPS_TO_SHOW] s DEBUGEM: zastaví skript, loguje do souboru ===
+    # === [APPS_TO_SHOW] s DEBUGEM: zastaví skript, loguje do souboru ===
     local APPS_DIR="${LOCAL_APPS:-$USER_HOME/.local/share/applications}"
     local DBG_LOG="$USER_HOME/debiconf-apps-debug.log"
     local APPS_LIST app
@@ -361,10 +361,15 @@ lxqt_setup_apps_and_defaults() {
         dbg "PŘED: $(grep -cE '^(OnlyShowIn|NotShowIn|NoDisplay|X-XfceSettingsManagerHidden)' "$APPS_DIR/$app") blokujících řádků"
         sed -i -E '/^(OnlyShowIn|NotShowIn|NoDisplay|X-XfceSettingsManagerHidden)[[:space:]]*=/d' "$APPS_DIR/$app"
         dbg "sed exit kód: $?"
-        dbg "PO:   $(grep -cE
+        dbg "PO:   $(grep -cE '^(OnlyShowIn|NotShowIn|NoDisplay|X-XfceSettingsManagerHidden)' "$APPS_DIR/$app") blokujících řádků"
+    done <<< "$APPS_LIST"
 
-    # obnova cache menu
-    update-desktop-database "$LOCAL_APPS" 2>/dev/null || true
+    update-desktop-database "$APPS_DIR" 2>/dev/null || true
+    dbg "=== [APPS_TO_SHOW] KONEC ==="
+
+    chown "$REAL_USER:$REAL_USER" "$DBG_LOG"
+    pause_debug "Blok dokončen. Výstup je v $DBG_LOG."
+    exit 1   # TVRDÉ ZASTAVENÍ: zbytek skriptu (a případný restart) se nespustí
 
     # --- IDENTIFIKACE A UMLČENÍ ZVOLENÉHO PROHLÍŽEČE ---
     local BROWSER_DESKTOP=""
