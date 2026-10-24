@@ -1542,6 +1542,8 @@ configure_lxqt() {
     chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config" "$USER_HOME/.local" || true
 
     lxqt_config_backup
+
+    sudo apt remove pcmanfm-qt
     
     log "=== KONFIGURACE LXQT BYLA ÚSPĚŠNĚ DOKONČENA ==="
 }
