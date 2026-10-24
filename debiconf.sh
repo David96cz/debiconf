@@ -321,7 +321,7 @@ lxqt_setup_apps_and_defaults() {
         fi
     done
 
-        read -rsn1 -p ">>> Blok hotov. Stiskni klávesu... " </dev/tty; echo
+    read -rsn1 -p ">>> Blok hotov. Stiskni klávesu... " </dev/tty; echo
 
     # --- IDENTIFIKACE A UMLČENÍ ZVOLENÉHO PROHLÍŽEČE ---
     local BROWSER_DESKTOP=""
