@@ -24,6 +24,22 @@ qps.desktop
 gdebi.desktop
 vim.desktop
 lxappearance.desktop
+lxqt-config-appearance.dekstop
+lxqt-config-monitor.desktop
+lxqt-config-input.desktop
+thunar-bulk-rename.desktop
+thunar-settings.desktop
+
+[APPS_TO_SHOW]
+xfce-backdrop-settings.desktop
+xfce-display-settings.desktop
+xfce-keyboard-settings.desktop
+xfce-mouse-settings.desktop
+xfce-settings-manager.desktop
+xfce-ui-settings.desktop
+xfce-wm-settings.desktop
+xfce-wmtweaks-settings.desktop
+xfce-workspaces-settings.desktop
 
 [AUTORUN]
 albert

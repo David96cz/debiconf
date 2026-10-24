@@ -309,6 +309,17 @@ lxqt_setup_apps_and_defaults() {
         [ -f "$LOCAL_APPS/$app" ] && sed -i '/^NoDisplay=/d; $ a NoDisplay=true' "$LOCAL_APPS/$app" || true
     done
 
+    # Zobrazení aplikací (odstranění OnlyShowIn a NoDisplay)
+    local APPS_TO_SHOW_STR=$(get_section "$LOCAL_CONFIG" "APPS_TO_SHOW")
+    read -r -a APPS_TO_SHOW <<< "$APPS_TO_SHOW_STR"
+    for app in "${APPS_TO_SHOW[@]}"; do
+        # Pokud soubor není v lokální složce, ale existuje v systému, zkopírujeme ho
+        [ ! -f "$LOCAL_APPS/$app" ] && [ -f "/usr/share/applications/$app" ] && cp "/usr/share/applications/$app" "$LOCAL_APPS/$app"
+        
+        # Smazání řádků OnlyShowIn, NotShowIn a případného NoDisplay
+        [ -f "$LOCAL_APPS/$app" ] && sed -i '/^OnlyShowIn=/d; /^NotShowIn=/d; /^NoDisplay=/d' "$LOCAL_APPS/$app" || true
+    done
+
     # --- IDENTIFIKACE A UMLČENÍ ZVOLENÉHO PROHLÍŽEČE ---
     local BROWSER_DESKTOP=""
     local BROWSER_BIN=""
@@ -1030,6 +1041,29 @@ lxqt_setup_appearance() {
         su - "$REAL_USER" -c "dbus-run-session bash -c 'bash /tmp/xfwm-apply.sh; sleep 2'" || true
         rm -f /tmp/xfwm-apply.sh
     fi
+
+    # Konfigurace GTK-3 pro Thunar a systém (ikony Papirus, Adwaita, světlý režim)
+    mkdir -p ~/.config/gtk-3.0 && echo -e "[Settings]\ngtk-icon-theme-name = Papirus\ngtk-theme-name = Adwaita\ngtk-application-prefer-dark-theme = false" > ~/.config/gtk-3.0/settings.ini
+
+    # Vynucení ikon Papirus přes XFCE xsettings démona
+    xfconf-query -c xsettings -p /Net/IconThemeName -s "Papirus" --create -t string
+
+    # Nastavení plochy (xfdesktop) - téma ikon a přesná viditelnost zástupců
+    xfconf-query -c xfce4-desktop -p /desktop-icons/icon-theme-name -s "Papirus" --create -t string
+    xfconf-query -c xfce4-desktop -p /desktop-icons/file-icons/show-filesystem -s false --create -t bool
+    xfconf-query -c xfce4-desktop -p /desktop-icons/file-icons/show-trash -s true --create -t bool
+    xfconf-query -c xfce4-desktop -p /desktop-icons/file-icons/show-removable -s false --create -t bool
+
+    # Dynamické nastavení tapety pro VŠECHNY připojené monitory (přes xrandr)
+    # Tohle vyřeší ten ojeb s tím, že se monitor jmenuje pokaždé jinak
+    for MON in $(xrandr | grep " connected" | awk '{print $1}'); do
+        xfconf-query -c xfce4-desktop -p "/backdrop/screen0/monitor${MON}/workspace0/last-image" -s "/usr/share/backgrounds/wallpaper.png" --create -t string
+        xfconf-query -c xfce4-desktop -p "/backdrop/screen0/monitor${MON}/workspace0/image-style" -s 5 --create -t int
+    done
+
+    # Pojistka: Zapsání i do obecného klíče monitor0, kdyby něco selhalo
+    xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -s "/usr/share/backgrounds/wallpaper.png" --create -t string
+    xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/image-style -s 5 --create -t int
 
     # 3. Architektura panelu
     local CONF_SRC="$CONTENTS_DIR/lxqt/config"
