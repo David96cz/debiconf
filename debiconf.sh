@@ -309,35 +309,48 @@ lxqt_setup_apps_and_defaults() {
         [ -f "$LOCAL_APPS/$app" ] && sed -i '/^NoDisplay=/d; $ a NoDisplay=true' "$LOCAL_APPS/$app" || true
     done
 
-    # Zobrazení aplikací (odstranění OnlyShowIn, NotShowIn a NoDisplay)
-    local APPS_TO_SHOW_STR
-    APPS_TO_SHOW_STR=$(get_section "$LOCAL_CONFIG" "APPS_TO_SHOW")
+        # Zobrazení aplikací: smaže OnlyShowIn / NotShowIn / NoDisplay z .desktop souborů v [APPS_TO_SHOW]
+    local APPS_DIR="${LOCAL_APPS:-$USER_HOME/.local/share/applications}"
+    local APPS_LIST app
 
-    mkdir -p "$LOCAL_APPS"
-    chown "$REAL_USER:$REAL_USER" "$LOCAL_APPS"
+    # Přečtení sekce přímo z configu (bez \r, bez prázdných řádků a komentářů)
+    APPS_LIST=$(tr -d '\r' < "$LOCAL_CONFIG" | awk '
+        /^\[/ { h = $0; gsub(/[ \t]+$/, "", h); insec = (h == "[APPS_TO_SHOW]"); next }
+        insec { gsub(/^[ \t]+|[ \t]+$/, ""); if ($0 != "" && $0 !~ /^#/) print }
+    ')
 
-    local app
+    echo "[APPS_TO_SHOW] config: $LOCAL_CONFIG | cílová složka: $APPS_DIR" >&2
+    [ -z "$APPS_LIST" ] && echo "VAROVÁNÍ: sekce [APPS_TO_SHOW] je prázdná nebo nenalezena" >&2
+
+    mkdir -p "$APPS_DIR"
+    chown "$REAL_USER:$REAL_USER" "$APPS_DIR"
+
     while IFS= read -r app; do
-        # ořezání \r a okrajových mezer
-        app="${app%$'\r'}"
-        app="${app#"${app%%[![:space:]]*}"}"
-        app="${app%"${app##*[![:space:]]}"}"
         [ -z "$app" ] && continue
-        [[ "$app" == \#* || "$app" == \[* ]] && continue
 
-        if [ ! -f "$LOCAL_APPS/$app" ]; then
+        # Pokud soubor není u uživatele, zkopíruje se ze systému
+        if [ ! -f "$APPS_DIR/$app" ]; then
             if [ -f "/usr/share/applications/$app" ]; then
-                cp "/usr/share/applications/$app" "$LOCAL_APPS/$app"
-                chown "$REAL_USER:$REAL_USER" "$LOCAL_APPS/$app"
+                cp "/usr/share/applications/$app" "$APPS_DIR/$app"
+                chown "$REAL_USER:$REAL_USER" "$APPS_DIR/$app"
             else
-                echo "VAROVÁNÍ: $app není v /usr/share/applications (chybí balíček?)" >&2
+                echo "VAROVÁNÍ: $app nenalezen (ani v $APPS_DIR, ani v /usr/share/applications)" >&2
                 continue
             fi
         fi
 
-        sed -i -E '/^(OnlyShowIn|NotShowIn|NoDisplay)[[:space:]]*=/d' "$LOCAL_APPS/$app"
-        echo "OK: upraveno $app"
-    done <<< "$APPS_TO_SHOW_STR"
+        # Smazání blokujících řádků
+        sed -i -E '/^(OnlyShowIn|NotShowIn|NoDisplay|X-XfceSettingsManagerHidden)[[:space:]]*=/d' "$APPS_DIR/$app"
+
+        # Kontrola výsledku
+        if grep -q '^OnlyShowIn' "$APPS_DIR/$app"; then
+            echo "CHYBA: $app stále obsahuje OnlyShowIn" >&2
+        else
+            echo "OK: $app" >&2
+        fi
+    done <<< "$APPS_LIST"
+
+    update-desktop-database "$APPS_DIR" 2>/dev/null || true
 
     # obnova cache menu
     update-desktop-database "$LOCAL_APPS" 2>/dev/null || true
