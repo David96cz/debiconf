@@ -309,16 +309,19 @@ lxqt_setup_apps_and_defaults() {
         [ -f "$LOCAL_APPS/$app" ] && sed -i '/^NoDisplay=/d; $ a NoDisplay=true' "$LOCAL_APPS/$app" || true
     done
 
-    # Zobrazení aplikací: smazání OnlyShowIn
-    local APPS_TO_SHOW_STR=$(get_section "$LOCAL_CONFIG" "APPS_TO_SHOW")
-    read -r -a APPS_TO_SHOW <<< "$APPS_TO_SHOW_STR"
-    for app in "${APPS_TO_SHOW[@]}"; do
-        if [ ! -f "$LOCAL_APPS/$app" ] && [ -f "/usr/share/applications/$app" ]; then
-            cp "/usr/share/applications/$app" "$LOCAL_APPS/$app"
-            chown "$REAL_USER:$REAL_USER" "$LOCAL_APPS/$app"
+    # Zobrazení aplikací: smazání OnlyShowIn (jen v $LOCAL_APPS, nic se nekopíruje)
+    local APPS_TO_SHOW_STR
+    APPS_TO_SHOW_STR=$(get_section "$LOCAL_CONFIG" "APPS_TO_SHOW" | tr -d '\r')
+    for app in $APPS_TO_SHOW_STR; do
+        if [ -f "$LOCAL_APPS/$app" ]; then
+            sed -i '/^OnlyShowIn=/d; /^NotShowIn=/d; /^NoDisplay=/d' "$LOCAL_APPS/$app"
+            echo "OK: $app"
+        else
+            echo "NENALEZENO v $LOCAL_APPS: $app"
         fi
-        [ -f "$LOCAL_APPS/$app" ] && sed -i '/^OnlyShowIn=/d; /^NotShowIn=/d; /^NoDisplay=/d' "$LOCAL_APPS/$app" || true
     done
+
+        read -rsn1 -p ">>> Blok hotov. Stiskni klávesu... " </dev/tty; echo
 
     # --- IDENTIFIKACE A UMLČENÍ ZVOLENÉHO PROHLÍŽEČE ---
     local BROWSER_DESKTOP=""
