@@ -313,44 +313,51 @@ lxqt_setup_apps_and_defaults() {
     local APPS_DIR="${LOCAL_APPS:-$USER_HOME/.local/share/applications}"
     local APPS_LIST app
 
-    # Přečtení sekce přímo z configu (bez \r, bez prázdných řádků a komentářů)
+    pause_debug() { read -rp ">>> [DEBUG] $1 Stiskni Enter pro pokračování... " </dev/tty; }
+
+    echo "=== [APPS_TO_SHOW] START ===" >&2
+    echo "LOCAL_CONFIG=[$LOCAL_CONFIG]  existuje: $([ -f "$LOCAL_CONFIG" ] && echo ano || echo NE)" >&2
+    echo "APPS_DIR=[$APPS_DIR]  existuje: $([ -d "$APPS_DIR" ] && echo ano || echo NE)" >&2
+    echo "REAL_USER=[$REAL_USER]  EUID=$EUID" >&2
+
     APPS_LIST=$(tr -d '\r' < "$LOCAL_CONFIG" | awk '
         /^\[/ { h = $0; gsub(/[ \t]+$/, "", h); insec = (h == "[APPS_TO_SHOW]"); next }
         insec { gsub(/^[ \t]+|[ \t]+$/, ""); if ($0 != "" && $0 !~ /^#/) print }
     ')
 
-    echo "[APPS_TO_SHOW] config: $LOCAL_CONFIG | cílová složka: $APPS_DIR" >&2
-    [ -z "$APPS_LIST" ] && echo "VAROVÁNÍ: sekce [APPS_TO_SHOW] je prázdná nebo nenalezena" >&2
+    echo "Nalezený seznam (počet řádků: $(printf '%s\n' "$APPS_LIST" | grep -c .)):" >&2
+    printf '%s\n' "$APPS_LIST" | cat -A >&2
+    pause_debug "Seznam načten."
 
     mkdir -p "$APPS_DIR"
     chown "$REAL_USER:$REAL_USER" "$APPS_DIR"
 
     while IFS= read -r app; do
         [ -z "$app" ] && continue
+        echo "--- $app ---" >&2
 
-        # Pokud soubor není u uživatele, zkopíruje se ze systému
         if [ ! -f "$APPS_DIR/$app" ]; then
             if [ -f "/usr/share/applications/$app" ]; then
-                cp "/usr/share/applications/$app" "$APPS_DIR/$app"
+                cp "/usr/share/applications/$app" "$APPS_DIR/$app" && echo "zkopírováno ze systému" >&2
                 chown "$REAL_USER:$REAL_USER" "$APPS_DIR/$app"
             else
-                echo "VAROVÁNÍ: $app nenalezen (ani v $APPS_DIR, ani v /usr/share/applications)" >&2
+                echo "CHYBA: $app nenalezen ani v $APPS_DIR, ani v /usr/share/applications" >&2
+                pause_debug "Soubor chybí."
                 continue
             fi
         fi
 
-        # Smazání blokujících řádků
+        echo "PŘED:  $(grep -cE '^(OnlyShowIn|NotShowIn|NoDisplay|X-XfceSettingsManagerHidden)' "$APPS_DIR/$app") blokujících řádků" >&2
         sed -i -E '/^(OnlyShowIn|NotShowIn|NoDisplay|X-XfceSettingsManagerHidden)[[:space:]]*=/d' "$APPS_DIR/$app"
-
-        # Kontrola výsledku
-        if grep -q '^OnlyShowIn' "$APPS_DIR/$app"; then
-            echo "CHYBA: $app stále obsahuje OnlyShowIn" >&2
-        else
-            echo "OK: $app" >&2
-        fi
+        echo "sed exit kód: $?" >&2
+        echo "PO:    $(grep -cE '^(OnlyShowIn|NotShowIn|NoDisplay|X-XfceSettingsManagerHidden)' "$APPS_DIR/$app") blokujících řádků" >&2
+        ls -l "$APPS_DIR/$app" >&2
+        pause_debug "$app hotovo."
     done <<< "$APPS_LIST"
 
     update-desktop-database "$APPS_DIR" 2>/dev/null || true
+    echo "=== [APPS_TO_SHOW] KONEC ===" >&2
+    pause_debug "Blok dokončen."
 
     # obnova cache menu
     update-desktop-database "$LOCAL_APPS" 2>/dev/null || true
