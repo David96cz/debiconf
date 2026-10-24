@@ -1025,7 +1025,6 @@ lxqt_setup_appearance() {
     chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config/lxqt" || true
     
     # --- KONEC NOVÉ ČÁSTI ---
-
     # 2. XFWM4 Session
     local SESSION_CONF="$USER_HOME/.config/lxqt/session.conf"
     if [ ! -f "$SESSION_CONF" ]; then
@@ -1035,26 +1034,34 @@ lxqt_setup_appearance() {
         grep -q "^window_manager=" "$SESSION_CONF" || sed -i '/^\[General\]/a window_manager=xfwm4' "$SESSION_CONF" || true
     fi
 
+    # ZÁCHRANA PRÁV: Zabezpečenie, že celá .config zložka patrí užívateľovi (inak všetko ostatné zlyhá)
+    chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config" 2>/dev/null || true
+
     local XFWM_SRC="$CONTENTS_DIR/lxqt/config/xfwm.conf"
     if [ -f "$XFWM_SRC" ]; then
         cp "$XFWM_SRC" /tmp/xfwm-apply.sh
         chown "$REAL_USER:$REAL_USER" /tmp/xfwm-apply.sh
         mkdir -p "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
         chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config/xfce4"
-        su - "$REAL_USER" -c "dbus-run-session bash -c 'bash /tmp/xfwm-apply.sh; sleep 2'" || true
+        # Falošný X11 server (xvfb) oklame xfconf-query, aby nespadol na D-Bus chybe
+        su "$REAL_USER" -c "xvfb-run -a dbus-run-session bash -c 'bash /tmp/xfwm-apply.sh; sleep 2'" || true
         rm -f /tmp/xfwm-apply.sh
     fi
 
-    # Zjištění ID reálného uživatele (aby se to nenastavovalo rootovi)
-# 1. Konfigurace GTK-3 pro Thunar a systém (ikony Papirus, Adwaita, světlý režim)
-sudo -u "$REAL_USER" mkdir -p "$USER_HOME/.config/gtk-3.0"
-sudo -u "$REAL_USER" bash -c "echo -e '[Settings]\ngtk-icon-theme-name = Papirus\ngtk-theme-name = Adwaita\ngtk-application-prefer-dark-theme = false' > $USER_HOME/.config/gtk-3.0/settings.ini"
+    # 1. Konfigurace GTK-3 pro Thunar a systém (ikony Papirus, Adwaita, světlý režim)
+    sudo -u "$REAL_USER" mkdir -p "$USER_HOME/.config/gtk-3.0"
+    sudo -u "$REAL_USER" bash -c "cat << 'EOF' > $USER_HOME/.config/gtk-3.0/settings.ini
+[Settings]
+gtk-icon-theme-name = Papirus
+gtk-theme-name = Adwaita
+gtk-application-prefer-dark-theme = false
+EOF"
 
-# 2. Vytvoření složek pro XFCE konfiguraci
-sudo -u "$REAL_USER" mkdir -p "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
+    # 2. Vytvoření složek pro XFCE konfiguraci
+    sudo -u "$REAL_USER" mkdir -p "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
 
-# 3. Zápis ikon (Papirus) přímo do xsettings.xml (obchází xfconf-query)
-sudo -u "$REAL_USER" bash -c "cat << 'EOF' > $USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml
+    # 3. Zápis ikon (Papirus) přímo do xsettings.xml
+    sudo -u "$REAL_USER" bash -c "cat << 'EOF' > $USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml
 <?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <channel name=\"xsettings\" version=\"1.0\">
   <property name=\"Net\" type=\"empty\">
@@ -1063,9 +1070,8 @@ sudo -u "$REAL_USER" bash -c "cat << 'EOF' > $USER_HOME/.config/xfce4/xfconf/xfc
 </channel>
 EOF"
 
-# 4. Zápis tapety a viditelnosti ikon na ploše přímo do xfce4-desktop.xml
-# (xrandr zde nefunguje, proto natvrdo pojišťujeme obecný monitor0 i Virtual-1)
-sudo -u "$REAL_USER" bash -c "cat << 'EOF' > $USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml
+    # 4. Zápis tapety a viditelnosti ikon na ploše přímo do xfce4-desktop.xml
+    sudo -u "$REAL_USER" bash -c "cat << 'EOF' > $USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml
 <?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <channel name=\"xfce4-desktop\" version=\"1.0\">
   <property name=\"desktop-icons\" type=\"empty\">
@@ -1094,7 +1100,6 @@ sudo -u "$REAL_USER" bash -c "cat << 'EOF' > $USER_HOME/.config/xfce4/xfconf/xfc
   </property>
 </channel>
 EOF"
-
 
     # 3. Architektura panelu
     local CONF_SRC="$CONTENTS_DIR/lxqt/config"
