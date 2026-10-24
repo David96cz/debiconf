@@ -83,6 +83,16 @@ for app in "$SYSTEM_APPS"/*.desktop; do
     fi
 done
 
+# --- ZOBRAZENÉ APLIKACE (seznam uložený instalátorem debiconf) ---
+SHOW_LIST="$HOME/.config/debiconf/apps-show.list"
+if [ -f "$SHOW_LIST" ]; then
+    while IFS= read -r show_app; do
+        show_app="${show_app%$'\r'}"
+        [ -n "$show_app" ] || continue
+        [ -f "$LOCAL_APPS/$show_app" ] && sed -i '/^OnlyShowIn=/d; /^NotShowIn=/d; /^NoDisplay=/d; /^X-XfceSettingsManagerHidden=/d' "$LOCAL_APPS/$show_app"
+    done < "$SHOW_LIST"
+fi
+
 # 4. Aktualizace databáze
 update-desktop-database "$LOCAL_APPS"
 
