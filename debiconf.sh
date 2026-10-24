@@ -1533,34 +1533,34 @@ lxqt_setup_apps_and_defaults() {
     fi
 }
 
-lxqt_config_backup() {
-    # --- ZÁLOHA A AUTOMATICKÁ OBNOVA (100% TAR Snapshot) ---
-    # log "8/8 Vytvářím 1:1 TAR snapshot .config pro případ, že by si uživatel smazal .config z domovského adresáře..."
+# lxqt_config_backup() {
+#     # --- ZÁLOHA A AUTOMATICKÁ OBNOVA (100% TAR Snapshot) ---
+#     # log "8/8 Vytvářím 1:1 TAR snapshot .config pro případ, že by si uživatel smazal .config z domovského adresáře..."
     
-    # # 0. Nasazení kanárka (tajný soubor)
-    # touch "$USER_HOME/.config/lxqt/.debiconf_ok"
+#     # # 0. Nasazení kanárka (tajný soubor)
+#     # touch "$USER_HOME/.config/lxqt/.debiconf_ok"
     
-    # # 1. Čistá záloha do archivu (Zaručí zachování struktury a zamezí slučování zmetků)
-    # mkdir -p /opt/debiconf-backup
-    # tar -czf /opt/debiconf-backup/config.tar.gz -C "$USER_HOME" .config
+#     # # 1. Čistá záloha do archivu (Zaručí zachování struktury a zamezí slučování zmetků)
+#     # mkdir -p /opt/debiconf-backup
+#     # tar -czf /opt/debiconf-backup/config.tar.gz -C "$USER_HOME" .config
     
-    # # Zabezpečíme, aby si to uživatel mohl po přihlášení sám rozbalit
-    # chmod 644 /opt/debiconf-backup/config.tar.gz
+#     # # Zabezpečíme, aby si to uživatel mohl po přihlášení sám rozbalit
+#     # chmod 644 /opt/debiconf-backup/config.tar.gz
     
-    # # 2. Záchranný skript (Běží při KAŽDÉM přihlášení)
-    # local RESTORE_SCRIPT="/etc/X11/Xsession.d/90debiconf-restore"
+#     # # 2. Záchranný skript (Běží při KAŽDÉM přihlášení)
+#     # local RESTORE_SCRIPT="/etc/X11/Xsession.d/90debiconf-restore"
     
-    # echo '# Kontrola na základě chybějícího kanárka' > "$RESTORE_SCRIPT"
-    # echo 'if [ ! -f "$HOME/.config/lxqt/.debiconf_ok" ]; then' >> "$RESTORE_SCRIPT"
-    # echo '    # 1. Nemilosrdně smazat zmetka, kterého LXQt vytvořilo při odhlášení' >> "$RESTORE_SCRIPT"
-    # echo '    rm -rf "$HOME/.config/lxqt"' >> "$RESTORE_SCRIPT"
-    # echo '    # 2. Rozbalit čistý 1:1 snapshot přesně tak, jak byl nastaven při instalaci' >> "$RESTORE_SCRIPT"
-    # echo '    tar -xzf /opt/debiconf-backup/config.tar.gz -C "$HOME"' >> "$RESTORE_SCRIPT"
-    # echo 'fi' >> "$RESTORE_SCRIPT"
+#     # echo '# Kontrola na základě chybějícího kanárka' > "$RESTORE_SCRIPT"
+#     # echo 'if [ ! -f "$HOME/.config/lxqt/.debiconf_ok" ]; then' >> "$RESTORE_SCRIPT"
+#     # echo '    # 1. Nemilosrdně smazat zmetka, kterého LXQt vytvořilo při odhlášení' >> "$RESTORE_SCRIPT"
+#     # echo '    rm -rf "$HOME/.config/lxqt"' >> "$RESTORE_SCRIPT"
+#     # echo '    # 2. Rozbalit čistý 1:1 snapshot přesně tak, jak byl nastaven při instalaci' >> "$RESTORE_SCRIPT"
+#     # echo '    tar -xzf /opt/debiconf-backup/config.tar.gz -C "$HOME"' >> "$RESTORE_SCRIPT"
+#     # echo 'fi' >> "$RESTORE_SCRIPT"
     
-    # chmod 644 "$RESTORE_SCRIPT"
-    # -------------------------------------------------------------
-}
+#     # chmod 644 "$RESTORE_SCRIPT"
+#     # -------------------------------------------------------------
+# }
 
 lxqt_drive_automount() {
     log "7/8: Konfiguruji automatické a trvalé připojení interních datových disků (FSTAB)..."
@@ -1621,7 +1621,7 @@ configure_lxqt() {
     
     chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config" "$USER_HOME/.local" || true
 
-    lxqt_config_backup
+    # lxqt_config_backup
 
     sudo apt remove -y pcmanfm-qt
     
