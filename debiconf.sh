@@ -1543,7 +1543,7 @@ configure_lxqt() {
 
     lxqt_config_backup
 
-    sudo apt remove pcmanfm-qt
+    sudo apt remove -y pcmanfm-qt
     
     log "=== KONFIGURACE LXQT BYLA ÚSPĚŠNĚ DOKONČENA ==="
 }
