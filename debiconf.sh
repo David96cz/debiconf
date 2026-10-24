@@ -1046,33 +1046,54 @@ lxqt_setup_appearance() {
     fi
 
     # Zjištění ID reálného uživatele (aby se to nenastavovalo rootovi)
-    REAL_UID=$(id -u "$REAL_USER")
+# 1. Konfigurace GTK-3 pro Thunar a systém (ikony Papirus, Adwaita, světlý režim)
+sudo -u "$REAL_USER" mkdir -p "$USER_HOME/.config/gtk-3.0"
+sudo -u "$REAL_USER" bash -c "echo -e '[Settings]\ngtk-icon-theme-name = Papirus\ngtk-theme-name = Adwaita\ngtk-application-prefer-dark-theme = false' > $USER_HOME/.config/gtk-3.0/settings.ini"
 
-    # Obal, který každý příkaz napojí na tvou identitu, tvůj monitor a tvůj D-Bus
-    CMD="sudo -u $REAL_USER env DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$REAL_UID/bus"
+# 2. Vytvoření složek pro XFCE konfiguraci
+sudo -u "$REAL_USER" mkdir -p "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
 
-    # 1. Konfigurace GTK-3 pro Thunar a systém (ikony Papirus, Adwaita, světlý režim)
-    $CMD mkdir -p "$USER_HOME/.config/gtk-3.0"
-    $CMD bash -c "echo -e '[Settings]\ngtk-icon-theme-name = Papirus\ngtk-theme-name = Adwaita\ngtk-application-prefer-dark-theme = false' > $USER_HOME/.config/gtk-3.0/settings.ini"
+# 3. Zápis ikon (Papirus) přímo do xsettings.xml (obchází xfconf-query)
+sudo -u "$REAL_USER" bash -c "cat << 'EOF' > $USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml
+<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<channel name=\"xsettings\" version=\"1.0\">
+  <property name=\"Net\" type=\"empty\">
+    <property name=\"IconThemeName\" type=\"string\" value=\"Papirus\"/>
+  </property>
+</channel>
+EOF"
 
-    # 2. Vynucení ikon Papirus přes XFCE xsettings démona
-    $CMD xfconf-query -c xsettings -p /Net/IconThemeName -s "Papirus" --create -t string
-
-    # 3. Nastavení plochy (xfdesktop) - téma ikon a přesná viditelnost zástupců
-    $CMD xfconf-query -c xfce4-desktop -p /desktop-icons/icon-theme-name -s "Papirus" --create -t string
-    $CMD xfconf-query -c xfce4-desktop -p /desktop-icons/file-icons/show-filesystem -s false --create -t bool
-    $CMD xfconf-query -c xfce4-desktop -p /desktop-icons/file-icons/show-trash -s true --create -t bool
-    $CMD xfconf-query -c xfce4-desktop -p /desktop-icons/file-icons/show-removable -s false --create -t bool
-
-    # 4. Dynamické nastavení tapety pro VŠECHNY připojené monitory (přes xrandr)
-    for MON in $($CMD xrandr | grep " connected" | awk '{print $1}'); do
-        $CMD xfconf-query -c xfce4-desktop -p "/backdrop/screen0/monitor${MON}/workspace0/last-image" -s "/usr/share/backgrounds/wallpaper.png" --create -t string
-        $CMD xfconf-query -c xfce4-desktop -p "/backdrop/screen0/monitor${MON}/workspace0/image-style" -s 5 --create -t int
-    done
-
-    # Pojistka: Zapsání i do obecného klíče monitor0, kdyby něco selhalo
-    $CMD xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -s "/usr/share/backgrounds/wallpaper.png" --create -t string
-    $CMD xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/image-style -s 5 --create -t int
+# 4. Zápis tapety a viditelnosti ikon na ploše přímo do xfce4-desktop.xml
+# (xrandr zde nefunguje, proto natvrdo pojišťujeme obecný monitor0 i Virtual-1)
+sudo -u "$REAL_USER" bash -c "cat << 'EOF' > $USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml
+<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<channel name=\"xfce4-desktop\" version=\"1.0\">
+  <property name=\"desktop-icons\" type=\"empty\">
+    <property name=\"icon-theme-name\" type=\"string\" value=\"Papirus\"/>
+    <property name=\"file-icons\" type=\"empty\">
+      <property name=\"show-filesystem\" type=\"bool\" value=\"false\"/>
+      <property name=\"show-trash\" type=\"bool\" value=\"true\"/>
+      <property name=\"show-removable\" type=\"bool\" value=\"false\"/>
+    </property>
+  </property>
+  <property name=\"backdrop\" type=\"empty\">
+    <property name=\"screen0\" type=\"empty\">
+      <property name=\"monitor0\" type=\"empty\">
+        <property name=\"workspace0\" type=\"empty\">
+          <property name=\"last-image\" type=\"string\" value=\"/usr/share/backgrounds/wallpaper.png\"/>
+          <property name=\"image-style\" type=\"int\" value=\"5\"/>
+        </property>
+      </property>
+      <property name=\"monitorVirtual-1\" type=\"empty\">
+        <property name=\"workspace0\" type=\"empty\">
+          <property name=\"last-image\" type=\"string\" value=\"/usr/share/backgrounds/wallpaper.png\"/>
+          <property name=\"image-style\" type=\"int\" value=\"5\"/>
+        </property>
+      </property>
+    </property>
+  </property>
+</channel>
+EOF"
 
 
     # 3. Architektura panelu
