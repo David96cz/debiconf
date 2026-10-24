@@ -305,17 +305,43 @@ lxqt_setup_apps_and_defaults() {
         [ -f "$LOCAL_APPS/$app" ] && sed -i '/^NoDisplay=/d; $ a NoDisplay=true' "$LOCAL_APPS/$app" || true
     done
 
-    # Zobrazení aplikací: smazání OnlyShowIn / NotShowIn / NoDisplay
+    # Log mimo složku projektu (ta se po instalaci maže)
+    local SHOW_LOG="$USER_HOME/debiconf-apps-show.log"
+    : > "$SHOW_LOG" || SHOW_LOG="/var/log/debiconf-apps-show.log"
+    showlog() { echo "$*" >> "$SHOW_LOG"; }
+
+    showlog "=== APPS_TO_SHOW $(date '+%F %T') ==="
+    showlog "funkce: ${FUNCNAME[0]}  EUID=$EUID  REAL_USER=$REAL_USER"
+    showlog "LOCAL_CONFIG=[$LOCAL_CONFIG]  existuje: $([ -f "$LOCAL_CONFIG" ] && echo ano || echo NE)"
+    showlog "LOCAL_APPS=[$LOCAL_APPS]  existuje: $([ -d "$LOCAL_APPS" ] && echo ano || echo NE)"
+    showlog "--- hlavičky sekcí v LOCAL_CONFIG (cat -A) ---"
+    grep -n '^\[' "$LOCAL_CONFIG" 2>&1 | cat -A >> "$SHOW_LOG"
+
     local APPS_TO_SHOW_STR
     APPS_TO_SHOW_STR=$(get_section "$LOCAL_CONFIG" "APPS_TO_SHOW" | tr -d '\r')
+    showlog "--- surový výstup get_section APPS_TO_SHOW (cat -A) ---"
+    printf '%s\n' "$APPS_TO_SHOW_STR" | cat -A >> "$SHOW_LOG"
+    showlog "počet položek: $(printf '%s\n' "$APPS_TO_SHOW_STR" | grep -c .)"
+    showlog "--- pro srovnání: počet položek APPS_TO_HIDE: $(get_section "$LOCAL_CONFIG" "APPS_TO_HIDE" | tr -d '\r' | grep -c .) ---"
+
     for app in $APPS_TO_SHOW_STR; do
+        showlog "--- $app ---"
         if [ -f "$LOCAL_APPS/$app" ]; then
+            showlog "PŘED: $(grep -cE '^(OnlyShowIn|NotShowIn|NoDisplay|X-XfceSettingsManagerHidden)=' "$LOCAL_APPS/$app") blokujících řádků"
             sed -i '/^OnlyShowIn=/d; /^NotShowIn=/d; /^NoDisplay=/d; /^X-XfceSettingsManagerHidden=/d' "$LOCAL_APPS/$app"
+            showlog "sed exit kód: $?"
+            showlog "PO:   $(grep -cE '^(OnlyShowIn|NotShowIn|NoDisplay|X-XfceSettingsManagerHidden)=' "$LOCAL_APPS/$app") blokujících řádků"
+            showlog "$(ls -l --time-style=full-iso "$LOCAL_APPS/$app")"
             log "Zobrazeno: $app"
         else
+            showlog "NENALEZEN: $LOCAL_APPS/$app"
             log "UPOZORNĚNÍ: $app nenalezen v $LOCAL_APPS"
         fi
     done
+
+    showlog "=== KONEC BLOKU ==="
+    chmod 644 "$SHOW_LOG" 2>/dev/null
+    chown "$REAL_USER:$REAL_USER" "$SHOW_LOG" 2>/dev/null
 
     # Aktualizace MIME mezipaměti (až po všech úpravách .desktop souborů)
     log "Aktualizuji lokální MIME databázi pro zástupce s wrappery..."
