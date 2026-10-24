@@ -309,67 +309,16 @@ lxqt_setup_apps_and_defaults() {
         [ -f "$LOCAL_APPS/$app" ] && sed -i '/^NoDisplay=/d; $ a NoDisplay=true' "$LOCAL_APPS/$app" || true
     done
 
-    # === [APPS_TO_SHOW] s DEBUGEM: zastaví skript, loguje do souboru ===
-    local APPS_DIR="${LOCAL_APPS:-$USER_HOME/.local/share/applications}"
-    local DBG_LOG="$USER_HOME/debiconf-apps-debug.log"
-    local APPS_LIST app
-
-    : > "$DBG_LOG"
-    dbg() { echo "$*" | tee -a "$DBG_LOG" >&2; }
-
-    pause_debug() {
-        dbg ">>> $1"
-        # čekání na klávesu z terminálu; když to nejde, skript se ZASTAVÍ (nepokračuje)
-        if ! read -rp ">>> Stiskni Enter pro pokračování... " </dev/tty 2>/dev/null; then
-            dbg "!!! NELZE ČÍST Z TERMINÁLU (/dev/tty) - skript se zastavuje. Výstup je v $DBG_LOG"
-            chown "$REAL_USER:$REAL_USER" "$DBG_LOG" 2>/dev/null
-            exit 1
+    # Zobrazení aplikací: smazání OnlyShowIn
+    local APPS_TO_SHOW_STR=$(get_section "$LOCAL_CONFIG" "APPS_TO_SHOW")
+    read -r -a APPS_TO_SHOW <<< "$APPS_TO_SHOW_STR"
+    for app in "${APPS_TO_SHOW[@]}"; do
+        if [ ! -f "$LOCAL_APPS/$app" ] && [ -f "/usr/share/applications/$app" ]; then
+            cp "/usr/share/applications/$app" "$LOCAL_APPS/$app"
+            chown "$REAL_USER:$REAL_USER" "$LOCAL_APPS/$app"
         fi
-    }
-
-    dbg "=== [APPS_TO_SHOW] START ==="
-    dbg "LOCAL_CONFIG=[$LOCAL_CONFIG]  existuje: $([ -f "$LOCAL_CONFIG" ] && echo ano || echo NE)"
-    dbg "APPS_DIR=[$APPS_DIR]  existuje: $([ -d "$APPS_DIR" ] && echo ano || echo NE)"
-    dbg "REAL_USER=[$REAL_USER]  EUID=$EUID"
-
-    APPS_LIST=$(tr -d '\r' < "$LOCAL_CONFIG" | awk '
-        /^\[/ { h = $0; gsub(/[ \t]+$/, "", h); insec = (h == "[APPS_TO_SHOW]"); next }
-        insec { gsub(/^[ \t]+|[ \t]+$/, ""); if ($0 != "" && $0 !~ /^#/) print }
-    ')
-
-    dbg "Počet nalezených řádků: $(printf '%s\n' "$APPS_LIST" | grep -c .)"
-    dbg "$(printf '%s\n' "$APPS_LIST" | cat -A)"
-    pause_debug "Seznam načten."
-
-    mkdir -p "$APPS_DIR"
-    chown "$REAL_USER:$REAL_USER" "$APPS_DIR"
-
-    while IFS= read -r app; do
-        [ -z "$app" ] && continue
-        dbg "--- $app ---"
-
-        if [ ! -f "$APPS_DIR/$app" ]; then
-            if [ -f "/usr/share/applications/$app" ]; then
-                cp "/usr/share/applications/$app" "$APPS_DIR/$app" && dbg "zkopírováno ze systému"
-                chown "$REAL_USER:$REAL_USER" "$APPS_DIR/$app"
-            else
-                dbg "CHYBA: $app nenalezen ani v $APPS_DIR, ani v /usr/share/applications"
-                continue
-            fi
-        fi
-
-        dbg "PŘED: $(grep -cE '^(OnlyShowIn|NotShowIn|NoDisplay|X-XfceSettingsManagerHidden)' "$APPS_DIR/$app") blokujících řádků"
-        sed -i -E '/^(OnlyShowIn|NotShowIn|NoDisplay|X-XfceSettingsManagerHidden)[[:space:]]*=/d' "$APPS_DIR/$app"
-        dbg "sed exit kód: $?"
-        dbg "PO:   $(grep -cE '^(OnlyShowIn|NotShowIn|NoDisplay|X-XfceSettingsManagerHidden)' "$APPS_DIR/$app") blokujících řádků"
-    done <<< "$APPS_LIST"
-
-    update-desktop-database "$APPS_DIR" 2>/dev/null || true
-    dbg "=== [APPS_TO_SHOW] KONEC ==="
-
-    chown "$REAL_USER:$REAL_USER" "$DBG_LOG"
-    pause_debug "Blok dokončen. Výstup je v $DBG_LOG."
-    exit 1   # TVRDÉ ZASTAVENÍ: zbytek skriptu (a případný restart) se nespustí
+        [ -f "$LOCAL_APPS/$app" ] && sed -i '/^OnlyShowIn=/d; /^NotShowIn=/d; /^NoDisplay=/d' "$LOCAL_APPS/$app" || true
+    done
 
     # --- IDENTIFIKACE A UMLČENÍ ZVOLENÉHO PROHLÍŽEČE ---
     local BROWSER_DESKTOP=""
