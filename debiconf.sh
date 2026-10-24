@@ -1035,7 +1035,7 @@ lxqt_setup_appearance() {
     
     # --- KONEC NOVÉ ČÁSTI ---
     
-    # 2. XFWM4 Session - Dynamické čtení ze zdrojového xfwm.conf
+        # 2. XFWM4 Session - Dynamické čtení ze zdrojového xfwm.conf
     local SESSION_CONF="$USER_HOME/.config/lxqt/session.conf"
     if [ ! -f "$SESSION_CONF" ]; then
         echo -e "[General]\nwindow_manager=xfwm4" > "$SESSION_CONF"
@@ -1063,7 +1063,6 @@ lxqt_setup_appearance() {
         
         rm -f /tmp/xfwm-apply.sh
     fi
-
 
     # 1. Konfigurace GTK-3 pro Thunar a systém (ikony Papirus, Adwaita, světlý režim)
     sudo -u "$REAL_USER" mkdir -p "$USER_HOME/.config/gtk-3.0"
