@@ -995,6 +995,9 @@ lxqt_setup_appearance() {
     fi
 
     # C) Nasazení předpřipravených konfigurací (Vzhled a GTK lock)
+    export DISPLAY="${DISPLAY:-:0}"
+    export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
+
     local APP_CONF_SRC="$CONTENTS_DIR/lxqt/config/lxqt-config-appearance.conf"
     local LXQT_CONF_DIR="$USER_HOME/.config/lxqt"
     mkdir -p "$LXQT_CONF_DIR"
@@ -1044,6 +1047,7 @@ lxqt_setup_appearance() {
 
     # Konfigurace GTK-3 pro Thunar a systém (ikony Papirus, Adwaita, světlý režim)
     mkdir -p ~/.config/gtk-3.0 && echo -e "[Settings]\ngtk-icon-theme-name = Papirus\ngtk-theme-name = Adwaita\ngtk-application-prefer-dark-theme = false" > ~/.config/gtk-3.0/settings.ini
+
 
     # Vynucení ikon Papirus přes XFCE xsettings démona
     xfconf-query -c xsettings -p /Net/IconThemeName -s "Papirus" --create -t string
