@@ -298,30 +298,28 @@ lxqt_setup_apps_and_defaults() {
         sed -i "s|^Exec=|Exec=python3 $WRAPPER_BIN |" "$LOCAL_APPS/$app_name" || true
     done
 
-    # TOTO JE TEN FIX PRO DVOJKLIK (Aktualizace MIME mezipaměti)
-    log "Aktualizuji lokální MIME databázi pro zástupce s wrappery..."
-    su - "$REAL_USER" -c "update-desktop-database ~/.local/share/applications" || true
-
     # Skrytí aplikací
-    local APPS_TO_HIDE_STR=$(get_section "$LOCAL_CONFIG" "APPS_TO_HIDE")
-    read -r -a APPS_TO_HIDE <<< "$APPS_TO_HIDE_STR"
-    for app in "${APPS_TO_HIDE[@]}"; do
+    local APPS_TO_HIDE_STR
+    APPS_TO_HIDE_STR=$(get_section "$LOCAL_CONFIG" "APPS_TO_HIDE" | tr -d '\r')
+    for app in $APPS_TO_HIDE_STR; do
         [ -f "$LOCAL_APPS/$app" ] && sed -i '/^NoDisplay=/d; $ a NoDisplay=true' "$LOCAL_APPS/$app" || true
     done
 
-    # Zobrazení aplikací: smazání OnlyShowIn (jen v $LOCAL_APPS, nic se nekopíruje)
+    # Zobrazení aplikací: smazání OnlyShowIn / NotShowIn / NoDisplay
     local APPS_TO_SHOW_STR
     APPS_TO_SHOW_STR=$(get_section "$LOCAL_CONFIG" "APPS_TO_SHOW" | tr -d '\r')
     for app in $APPS_TO_SHOW_STR; do
         if [ -f "$LOCAL_APPS/$app" ]; then
-            sed -i '/^OnlyShowIn=/d; /^NotShowIn=/d; /^NoDisplay=/d' "$LOCAL_APPS/$app"
-            echo "OK: $app"
+            sed -i '/^OnlyShowIn=/d; /^NotShowIn=/d; /^NoDisplay=/d; /^X-XfceSettingsManagerHidden=/d' "$LOCAL_APPS/$app"
+            log "Zobrazeno: $app"
         else
-            echo "NENALEZENO v $LOCAL_APPS: $app"
+            log "UPOZORNĚNÍ: $app nenalezen v $LOCAL_APPS"
         fi
     done
 
-    read -rsn1 -p ">>> Blok hotov. Stiskni klávesu... " </dev/tty; echo
+    # Aktualizace MIME mezipaměti (až po všech úpravách .desktop souborů)
+    log "Aktualizuji lokální MIME databázi pro zástupce s wrappery..."
+    su - "$REAL_USER" -c "update-desktop-database ~/.local/share/applications" || true
 
     # --- IDENTIFIKACE A UMLČENÍ ZVOLENÉHO PROHLÍŽEČE ---
     local BROWSER_DESKTOP=""
@@ -334,9 +332,6 @@ lxqt_setup_apps_and_defaults() {
             4) BROWSER_DESKTOP="firefox-esr.desktop"; [ -x "/usr/bin/firefox" ] && BROWSER_BIN="/usr/bin/firefox" || BROWSER_BIN="/usr/bin/firefox-esr" ;;
         esac
 
-        # Vypnutí otravného Keyringu a vynucení mlčení o výchozím prohlížeči (Aplikováno na LOKÁLNÍ soubor)
-        local LOCAL_APPS="$USER_HOME/.local/share/applications"
-        
         if [ "$BROWSER_DESKTOP" = "google-chrome.desktop" ] && [ -f "$LOCAL_APPS/google-chrome.desktop" ]; then
             sed -i 's/google-chrome-stable %U/google-chrome-stable --password-store=basic --no-default-browser-check %U/g' "$LOCAL_APPS/google-chrome.desktop" || true
         fi
@@ -346,20 +341,16 @@ lxqt_setup_apps_and_defaults() {
         fi
 
         log "Nastavuji $BROWSER_DESKTOP jako systémový default a potlačuji hlášky..."
-        
-        # Nastavení XDG z pohledu uživatele (Umlčí hlášky)
         su - "$REAL_USER" -c "xdg-settings set default-web-browser $BROWSER_DESKTOP 2>/dev/null" || true
         su - "$REAL_USER" -c "xdg-mime default $BROWSER_DESKTOP x-scheme-handler/http 2>/dev/null" || true
         su - "$REAL_USER" -c "xdg-mime default $BROWSER_DESKTOP x-scheme-handler/https 2>/dev/null" || true
         
-        # --- TVRDÉ UMLČENÍ INTERNÍHO HLÍDAČE VÝCHOZOSTI (CHROME) ---
         if [ "$BROWSER_CHOICE" == "1" ]; then
             log "Vynucuji firemní politiku pro umlčení Chrome hlášky..."
             mkdir -p /etc/opt/chrome/policies/managed
             echo '{"DefaultBrowserSettingEnabled": false}' > /etc/opt/chrome/policies/managed/default_browser.json
         fi
 
-        # Kladivo přes Debian Alternatives
         if [ -x "$BROWSER_BIN" ]; then
             update-alternatives --set x-www-browser "$BROWSER_BIN" 2>/dev/null || true
             update-alternatives --set gnome-www-browser "$BROWSER_BIN" 2>/dev/null || true
@@ -391,7 +382,6 @@ lxqt_setup_apps_and_defaults() {
             if [[ "$line" =~ ^\[(.*)\]$ ]]; then
                 CURRENT_APP="${BASH_REMATCH[1]}"
                 
-                # INTELIGENCE: Přeskočíme odmítnuté aplikace a cizí prohlížeče
                 if [ "$CURRENT_APP" == "wine.desktop" ] && [ "$WINE_REQ" != "TRUE" ]; then
                     CURRENT_APP="SKIP"
                 elif [[ "$CURRENT_APP" == *"libreoffice"* ]] && [ "$OFFICE_CHOICE" != "1" ]; then
@@ -399,7 +389,6 @@ lxqt_setup_apps_and_defaults() {
                 elif [[ "$CURRENT_APP" == *"onlyoffice"* ]] && [ "$OFFICE_CHOICE" != "2" ]; then
                     CURRENT_APP="SKIP"
                 elif [[ "$CURRENT_APP" =~ (google-chrome|chromium|brave-browser|firefox) ]]; then
-                    # Pokud se prohlížeč neshoduje s tím zvoleným, vyřadíme jeho asociace
                     if [ "$CURRENT_APP" != "$BROWSER_DESKTOP" ]; then
                         CURRENT_APP="SKIP"
                     fi
@@ -409,12 +398,14 @@ lxqt_setup_apps_and_defaults() {
                 set_default_app "$line" "$CURRENT_APP"
             fi
         done < "$APPS_CONF"
+    else
+        log "UPOZORNĚNÍ: Soubor $APPS_CONF nebyl nalezen, výchozí aplikace nebudou nastaveny."
     fi
 
     # Autostart
     local AUTOSTART_DIR="$USER_HOME/.config/autostart"
     mkdir -p "$AUTOSTART_DIR"
-    AUTORUN_APPS=$(awk '/^\[AUTORUN\]/{flag=1; next} /^\[/{flag=0} flag && NF' "$CONTENTS_DIR/lxqt/config.txt")
+    AUTORUN_APPS=$(awk '/^\[AUTORUN\]/{flag=1; next} /^\[/{flag=0} flag && NF' "$CONTENTS_DIR/lxqt/config.txt" | tr -d '\r')
 
     if [ -n "$AUTORUN_APPS" ]; then
         for APP in $AUTORUN_APPS; do
@@ -452,10 +443,18 @@ lxqt_setup_apps_and_defaults() {
     ln -sfn /media "$ALBERT_DISKS/media"
     ln -sfn /mnt "$ALBERT_DISKS/mnt"
 
+    # Zabití "first run" dialogu
     local ALBERT_STATE_DIR="$USER_HOME/.local/share/albert"
     mkdir -p "$ALBERT_STATE_DIR"
     echo -e "[General]\nlast_used_version=34.0.10" > "$ALBERT_STATE_DIR/state"
 
+    # Fix autostartu Alberta (zabití staré instance při přihlášení)
+    cp /usr/share/applications/albert.desktop "$AUTOSTART_DIR/" 2>/dev/null || true
+    if [ -f "$AUTOSTART_DIR/albert.desktop" ]; then
+        sed -i 's/^Exec=.*/Exec=sh -c "killall -9 albert 2>\/dev\/null; sleep 1 \&\& albert"/' "$AUTOSTART_DIR/albert.desktop"
+    fi
+
+    # PeaZip
     local PEAZIP_SRC="$CONTENTS_DIR/lxqt/config/peazip.conf"
     local PEAZIP_DEST="$USER_HOME/.config/peazip/conf.txt"
     if [ -f "$PEAZIP_SRC" ]; then
@@ -463,23 +462,49 @@ lxqt_setup_apps_and_defaults() {
         cp "$PEAZIP_SRC" "$PEAZIP_DEST"
         sed -i "s|/home/david|$USER_HOME|g" "$PEAZIP_DEST"
         
-        local PEAZIP_LANG=""
-        case "$SYS_LANG_CODE" in
-            cs) PEAZIP_LANG="cz.txt" ;;
-            sk) PEAZIP_LANG="sk.txt" ;;
-            de) PEAZIP_LANG="de.txt" ;;
-            fr) PEAZIP_LANG="fr.txt" ;;
-            es) PEAZIP_LANG="es.txt" ;;
-            pl) PEAZIP_LANG="pl.txt" ;;
-            *) PEAZIP_LANG="" ;;
+        # Dynamický jazyk PeaZipu
+        local PEAZIP_LANG="en.txt"
+        case "${SYS_LANG_CODE,,}" in
+            cs*) PEAZIP_LANG="cz.txt" ;;
+            sk*) PEAZIP_LANG="sk.txt" ;;
+            de*) PEAZIP_LANG="de.txt" ;;
+            fr*) PEAZIP_LANG="fr.txt" ;;
+            es*) PEAZIP_LANG="es.txt" ;;
+            pl*) PEAZIP_LANG="pl.txt" ;;
         esac
         
-        if grep -q "^\[language\]" "$PEAZIP_DEST"; then
-            sed -i "/^\[language\]/{n;s/.*/$PEAZIP_LANG/}" "$PEAZIP_DEST"
+        awk -v lang="$PEAZIP_LANG" '
+            /^\[language\]\r?$/ { print; getline; print lang; next }
+            { print }
+        ' "$PEAZIP_DEST" > "${PEAZIP_DEST}.tmp" && mv "${PEAZIP_DEST}.tmp" "$PEAZIP_DEST"
+
+        # Odstranění nativní komprimace a nasazení PeaZip akce
+        log "Odstraňuji nativní nefunkční komprimaci a nasazuji PeaZip akci..."
+        rm -f /usr/share/libfm-qt/archivers.list 2>/dev/null || true
+        rm -f /usr/share/libfm-qt6/archivers.list 2>/dev/null || true
+        rm -f /usr/share/libfm/archivers.list 2>/dev/null || true
+        rm -f /etc/xdg/libfm/archivers.list 2>/dev/null || true
+        
+        local PCMANFM_CONF="$USER_HOME/.config/pcmanfm-qt/lxqt/settings.conf"
+        if [ -f "$PCMANFM_CONF" ]; then
+            sed -i '/^Archiver=/d' "$PCMANFM_CONF" || true
         fi
+        
+        local ACTIONS_DIR="$USER_HOME/.local/share/file-manager/actions"
+        mkdir -p "$ACTIONS_DIR"
+        
+        local PEAZIP_ACTION="$ACTIONS_DIR/peazip.desktop"
+        echo '[Desktop Entry]' > "$PEAZIP_ACTION"
+        echo 'Type=Action' >> "$PEAZIP_ACTION"
+        echo 'Name=Komprimovat (PeaZip)...' >> "$PEAZIP_ACTION"
+        echo 'Icon=peazip' >> "$PEAZIP_ACTION"
+        echo 'Profiles=profile-zero;' >> "$PEAZIP_ACTION"
+        echo '[X-Action-Profile profile-zero]' >> "$PEAZIP_ACTION"
+        echo 'MimeTypes=all/allfiles;inode/directory;' >> "$PEAZIP_ACTION"
+        echo 'Exec=peazip -add %F' >> "$PEAZIP_ACTION"
     fi
 
-    # Ošetření práv na závěr, aby vše v konfiguračních složkách patřilo tetě
+    # Ošetření práv na závěr
     chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config" "$USER_HOME/.local" 2>/dev/null || true
 }
 
@@ -1333,197 +1358,6 @@ lxqt_packages_install() {
         fi
     else
         log "CHYBA: Nepodařilo se získat odkaz na PeaZip z GitHubu."
-    fi
-}
-
-lxqt_setup_apps_and_defaults() {
-    log "6/8: Nastavuji chování aplikací, MIME typy a Autostart..."
-    
-    local LOCAL_APPS="$USER_HOME/.local/share/applications"
-    local WRAPPER_BIN="$USER_HOME/.local/bin/busy-launch.py"
-    mkdir -p "$LOCAL_APPS"
-    
-    # Nasazení wrapperů
-    for app in /usr/share/applications/*.desktop; do
-        [ -e "$app" ] || continue
-        app_name=$(basename "$app")
-        cp "$app" "$LOCAL_APPS/" || true
-        sed -i "s|^Exec=|Exec=python3 $WRAPPER_BIN |" "$LOCAL_APPS/$app_name" || true
-    done
-
-    # Skrytí aplikací
-    local APPS_TO_HIDE_STR=$(get_section "$LOCAL_CONFIG" "APPS_TO_HIDE")
-    read -r -a APPS_TO_HIDE <<< "$APPS_TO_HIDE_STR"
-    for app in "${APPS_TO_HIDE[@]}"; do
-        [ -f "$LOCAL_APPS/$app" ] && sed -i '/^NoDisplay=/d; $ a NoDisplay=true' "$LOCAL_APPS/$app" || true
-    done
-
-    # --- MIME Typy ---
-    local MIME_FILE="$USER_HOME/.config/mimeapps.list"
-    [ ! -f "$MIME_FILE" ] && echo "[Added Associations]" > "$MIME_FILE"
-    grep -q "^\[Added Associations\]" "$MIME_FILE" || echo "[Added Associations]" >> "$MIME_FILE"
-
-    set_default_app() {
-        local mime="$1"
-        local app="$2"
-        sed -i "/^${mime//\//\\/}=/d" "$MIME_FILE" 2>/dev/null || true
-        sed -i "/^\[Added Associations\]/a ${mime}=${app};" "$MIME_FILE"
-    }
-
-    local APPS_CONF="$CONTENTS_DIR/lxqt/config/defaultapps.conf"
-    
-    if [ -f "$APPS_CONF" ]; then
-        log "Načítám výchozí aplikace z defaultapps.conf..."
-        local CURRENT_APP=""
-        
-        while IFS= read -r line || [ -n "$line" ]; do
-            line=$(echo "$line" | xargs) # Očištění od mezer
-            [[ -z "$line" || "$line" =~ ^# ]] && continue # Přeskočí prázdné řádky a komentáře
-            
-            if [[ "$line" =~ ^\[(.*)\]$ ]]; then
-                CURRENT_APP="${BASH_REMATCH[1]}"
-                
-                # INTELIGENCE: Přeskočíme aplikace, které uživatel v dotazníku odmítl
-                if [ "$CURRENT_APP" == "wine.desktop" ] && [ "$WINE_CHOICE" != "1" ]; then
-                    CURRENT_APP="SKIP"
-                elif [ "$CURRENT_APP" == "libreoffice-writer.desktop" ] && [ "$OFFICE_CHOICE" != "1" ]; then
-                    CURRENT_APP="SKIP"
-                elif [ "$CURRENT_APP" == "onlyoffice-desktopeditors.desktop" ] && [ "$OFFICE_CHOICE" != "2" ]; then
-                    CURRENT_APP="SKIP"
-                fi
-                
-            elif [ "$CURRENT_APP" != "SKIP" ] && [ -n "$CURRENT_APP" ]; then
-                # Pokud nejsme ve SKIP módu, zapíšeme MIME typ k aktuální aplikaci
-                set_default_app "$line" "$CURRENT_APP"
-            fi
-        done < "$APPS_CONF"
-    else
-        log "UPOZORNĚNÍ: Soubor $APPS_CONF nebyl nalezen, výchozí aplikace nebudou nastaveny."
-    fi
-
-    # Autostart
-    local AUTOSTART_DIR="$USER_HOME/.config/autostart"
-    mkdir -p "$AUTOSTART_DIR"
-    AUTORUN_APPS=$(awk '/^\[AUTORUN\]/{flag=1; next} /^\[/{flag=0} flag && NF' "$CONTENTS_DIR/lxqt/config.txt")
-
-    if [ -n "$AUTORUN_APPS" ]; then
-        for APP in $AUTORUN_APPS; do
-            local DEST_DESKTOP="$AUTOSTART_DIR/${APP}-autostart.desktop"
-            local EXEC_CMD="$APP"
-            
-            # CHYTRÁ DETEKCE CESTY: 
-            # Pokud název aplikace končí na .sh nebo .py, vynuť absolutní cestu k .local/bin
-            if [[ "$APP" == *.sh || "$APP" == *.py ]]; then
-                EXEC_CMD="$USER_HOME/.local/bin/$APP"
-            fi
-            
-            echo "[Desktop Entry]" > "$DEST_DESKTOP"
-            echo "Type=Application" >> "$DEST_DESKTOP"
-            echo "Name=Autostart $APP" >> "$DEST_DESKTOP"
-            echo "Exec=$EXEC_CMD" >> "$DEST_DESKTOP"
-            echo "Hidden=false" >> "$DEST_DESKTOP"
-            echo "NoDisplay=false" >> "$DEST_DESKTOP"
-            echo "X-GNOME-Autostart-enabled=true" >> "$DEST_DESKTOP"
-        done
-    fi
-
-    # --- KONFIGURACE ALBERT A PEAZIP (Dynamické cesty) ---
-    log "Nasazuji konfigurace pro Albert a PeaZip..."
-    
-    # 1. Albert
-    local ALBERT_SRC="$CONTENTS_DIR/lxqt/config/albert.conf"
-    local ALBERT_DEST="$USER_HOME/.config/albert/config"
-    if [ -f "$ALBERT_SRC" ]; then
-        mkdir -p "$(dirname "$ALBERT_DEST")"
-        cp "$ALBERT_SRC" "$ALBERT_DEST"
-        
-        # Nahrazení normální cesty (/home/david -> /home/novyuzivatel)
-        sed -i "s|/home/david|$USER_HOME|g" "$ALBERT_DEST"
-        # Nahrazení Qt escapované cesty (home\david -> home\novyuzivatel)
-        sed -i "s|home\\\\david|home\\\\$REAL_USER|g" "$ALBERT_DEST"
-    fi
-
-    # Vytvoření portálů pro Alberta k obcházení Qt bugu s krátkými cestami
-    local ALBERT_DISKS="$USER_HOME/.local/share/albert_disks"
-    mkdir -p "$ALBERT_DISKS"
-    ln -sfn /media "$ALBERT_DISKS/media"
-    ln -sfn /mnt "$ALBERT_DISKS/mnt"
-
-    # ZABITÍ "FIRST RUN" DIALOGU (Podstrčení stavového souboru)
-    local ALBERT_STATE_DIR="$USER_HOME/.local/share/albert"
-    mkdir -p "$ALBERT_STATE_DIR"
-    echo -e "[General]\nlast_used_version=34.0.10" > "$ALBERT_STATE_DIR/state"
-
-    # FIX PRO AUTOSTART (Zabití staré instance při odhlášení/přihlášení)
-    local AUTOSTART_DIR="$USER_HOME/.config/autostart"
-    mkdir -p "$AUTOSTART_DIR"
-    cp /usr/share/applications/albert.desktop "$AUTOSTART_DIR/" 2>/dev/null || true
-    if [ -f "$AUTOSTART_DIR/albert.desktop" ]; then
-        sed -i 's/^Exec=.*/Exec=sh -c "killall -9 albert 2>\/dev\/null; sleep 1 \&\& albert"/' "$AUTOSTART_DIR/albert.desktop"
-    fi
-
-    # 2. PeaZip
-    local PEAZIP_SRC="$CONTENTS_DIR/lxqt/config/peazip.conf"
-    local PEAZIP_DEST="$USER_HOME/.config/peazip/conf.txt"
-    if [ -f "$PEAZIP_SRC" ]; then
-        mkdir -p "$(dirname "$PEAZIP_DEST")"
-        cp "$PEAZIP_SRC" "$PEAZIP_DEST"
-        
-        # Nahrazení normální cesty
-        sed -i "s|/home/david|$USER_HOME|g" "$PEAZIP_DEST"
-        
-        # --- DYNAMICKÉ NASTAVENÍ JAZYKA PEAZIPU ---
-        local PEAZIP_LANG="en.txt" # Nastavíme výchozí jako angličtinu (lepší než prázdno)
-        
-        # Použití hvězdičky (*) chytí i formáty jako cs_CZ nebo de_DE.UTF-8
-        case "${SYS_LANG_CODE,,}" in
-            cs*) PEAZIP_LANG="cz.txt" ;;
-            sk*) PEAZIP_LANG="sk.txt" ;;
-            de*) PEAZIP_LANG="de.txt" ;;
-            fr*) PEAZIP_LANG="fr.txt" ;;
-            es*) PEAZIP_LANG="es.txt" ;;
-            pl*) PEAZIP_LANG="pl.txt" ;;
-        esac
-        
-        # Extrémně bezpečné nahrazení přes awk (imunní na \r z Windows)
-        awk -v lang="$PEAZIP_LANG" '
-            /^\[language\]\r?$/ { print; getline; print lang; next }
-            { print }
-        ' "$PEAZIP_DEST" > "${PEAZIP_DEST}.tmp" && mv "${PEAZIP_DEST}.tmp" "$PEAZIP_DEST"
-
-        # --- ODSTRANĚNÍ NATIVNÍHO TLAČÍTKA A NASTAVENÍ PEAZIPU ---
-        log "Odstraňuji nativní nefunkční komprimaci a nasazuji PeaZip akci..."
-        
-        # 1. Vymazání seznamu archiverů (Definitivní smrt mrtvého tlačítka "Komprimovat")
-        # Tohle způsobí, že se původní zmetek v menu vůbec nevykreslí
-        rm -f /usr/share/libfm-qt/archivers.list 2>/dev/null || true
-        rm -f /usr/share/libfm-qt6/archivers.list 2>/dev/null || true
-        rm -f /usr/share/libfm/archivers.list 2>/dev/null || true
-        rm -f /etc/xdg/libfm/archivers.list 2>/dev/null || true
-        
-        # 2. Vyčištění PCManFM-Qt konfigurace (aby v ní nezůstaly staré záznamy)
-        local PCMANFM_CONF="$USER_HOME/.config/pcmanfm-qt/lxqt/settings.conf"
-        if [ -f "$PCMANFM_CONF" ]; then
-            sed -i '/^Archiver=/d' "$PCMANFM_CONF" || true
-        fi
-        
-        # 3. Vytvoření vlastního a plně funkčního tlačítka pro PeaZip
-        local ACTIONS_DIR="$USER_HOME/.local/share/file-manager/actions"
-        mkdir -p "$ACTIONS_DIR"
-        
-        local PEAZIP_ACTION="$ACTIONS_DIR/peazip.desktop"
-        echo '[Desktop Entry]' > "$PEAZIP_ACTION"
-        echo 'Type=Action' >> "$PEAZIP_ACTION"
-        echo 'Name=Komprimovat (PeaZip)...' >> "$PEAZIP_ACTION"
-        echo 'Icon=peazip' >> "$PEAZIP_ACTION"
-        echo 'Profiles=profile-zero;' >> "$PEAZIP_ACTION"
-        echo '[X-Action-Profile profile-zero]' >> "$PEAZIP_ACTION"
-        echo 'MimeTypes=all/allfiles;inode/directory;' >> "$PEAZIP_ACTION"
-        echo 'Exec=peazip -add %F' >> "$PEAZIP_ACTION"
-        
-        # 4. Uzamčení správných práv pro uživatele (aby akce fungovaly)
-        chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.local/share/file-manager" || true
-        # ------------------------------------------
     fi
 }
 
