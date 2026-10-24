@@ -1035,7 +1035,7 @@ lxqt_setup_appearance() {
     
     # --- KONEC NOVÉ ČÁSTI ---
     
-        # 2. XFWM4 Session - Dynamické čtení ze zdrojového xfwm.conf
+        # 2. XFWM4 Session - Přímý a 100% spolehlivý zápis konfigurace do XML
     local SESSION_CONF="$USER_HOME/.config/lxqt/session.conf"
     if [ ! -f "$SESSION_CONF" ]; then
         echo -e "[General]\nwindow_manager=xfwm4" > "$SESSION_CONF"
@@ -1044,25 +1044,30 @@ lxqt_setup_appearance() {
         grep -q "^window_manager=" "$SESSION_CONF" || sed -i '/^\[General\]/a window_manager=xfwm4' "$SESSION_CONF" || true
     fi
 
-    # ZÁCHRANA PRÁV: Zabezpečení, že celá .config složka patří uživateli
+    # ZÁCHRANA PRÁV
     chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config" 2>/dev/null || true
 
-    local XFWM_SRC="$CONTENTS_DIR/lxqt/config/xfwm.conf"
-    if [ -f "$XFWM_SRC" ]; then
-        cp "$XFWM_SRC" /tmp/xfwm-apply.sh
-        chown "$REAL_USER:$REAL_USER" /tmp/xfwm-apply.sh
-        
-        # Složky pro uložení výsledného XML musí existovat
-        mkdir -p "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
-        chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config/xfce4"
-        
-        # SPUŠTĚNÍ A VYNUCENÝ ZÁPIS NA DISK:
-        # Spustí tvůj config, následně korektně ukončí xfconfd (což spustí zápis na disk)
-        # a počká 2 vteřiny, než se celá D-Bus relace rozpadne.
-        su "$REAL_USER" -c "xvfb-run -a dbus-run-session bash -c 'bash /tmp/xfwm-apply.sh; killall -15 xfconfd 2>/dev/null; sleep 2'" || true
-        
-        rm -f /tmp/xfwm-apply.sh
-    fi
+    # Vytvoření konfiguračního adresáře pro XFCE
+    mkdir -p "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
+
+    # Přímý zápis XML souboru pro xfwm4 (motiv, tlačítka, zarovnání a chování oken)
+    sudo -u "$REAL_USER" bash -c "cat << 'EOF' > $USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml
+<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<channel name=\"xfwm4\" version=\"1.0\">
+  <property name=\"general\" type=\"empty\">
+    <property name=\"theme\" type=\"string\" value=\"Default\"/>
+    <property name=\"button_layout\" type=\"string\" value=\"O|HMC\"/>
+    <property name=\"title_alignment\" type=\"string\" value=\"center\"/>
+    <property name=\"tile_on_move\" type=\"bool\" value=\"true\"/>
+    <property name=\"wrap_pointer\" type=\"bool\" value=\"false\"/>
+    <property name=\"wrap_windows\" type=\"bool\" value=\"false\"/>
+    <property name=\"snap_to_border\" type=\"bool\" value=\"true\"/>
+    <property name=\"snap_to_windows\" type=\"bool\" value=\"true\"/>
+  </property>
+</channel>
+EOF"
+
+    chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.config/xfce4"
 
     # 1. Konfigurace GTK-3 pro Thunar a systém (ikony Papirus, Adwaita, světlý režim)
     sudo -u "$REAL_USER" mkdir -p "$USER_HOME/.config/gtk-3.0"
