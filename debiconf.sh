@@ -1534,7 +1534,7 @@ lxqt_setup_apps_and_defaults() {
 }
 
 lxqt_config_backup() {
-    # # --- ZÁLOHA A AUTOMATICKÁ OBNOVA (100% TAR Snapshot) ---
+    # --- ZÁLOHA A AUTOMATICKÁ OBNOVA (100% TAR Snapshot) ---
     # log "8/8 Vytvářím 1:1 TAR snapshot .config pro případ, že by si uživatel smazal .config z domovského adresáře..."
     
     # # 0. Nasazení kanárka (tajný soubor)
@@ -1559,7 +1559,7 @@ lxqt_config_backup() {
     # echo 'fi' >> "$RESTORE_SCRIPT"
     
     # chmod 644 "$RESTORE_SCRIPT"
-    # # -------------------------------------------------------------
+    # -------------------------------------------------------------
 }
 
 lxqt_drive_automount() {
