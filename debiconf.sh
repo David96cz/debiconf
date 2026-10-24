@@ -309,25 +309,38 @@ lxqt_setup_apps_and_defaults() {
         [ -f "$LOCAL_APPS/$app" ] && sed -i '/^NoDisplay=/d; $ a NoDisplay=true' "$LOCAL_APPS/$app" || true
     done
 
-    # Zobrazení aplikací (odstranění OnlyShowIn a NoDisplay)
-    local APPS_TO_SHOW_STR=$(get_section "$LOCAL_CONFIG" "APPS_TO_SHOW")
-    
-    # while cyklus zaručí, že se přečtou VŠECHNY řádky, ne jen ten první
-    while read -r app; do
-        # Přeskočení prázdných řádků (kdyby byly v configu mezery)
+    # Zobrazení aplikací (odstranění OnlyShowIn, NotShowIn a NoDisplay)
+    local APPS_TO_SHOW_STR
+    APPS_TO_SHOW_STR=$(get_section "$LOCAL_CONFIG" "APPS_TO_SHOW")
+
+    mkdir -p "$LOCAL_APPS"
+    chown "$REAL_USER:$REAL_USER" "$LOCAL_APPS"
+
+    local app
+    while IFS= read -r app; do
+        # ořezání \r a okrajových mezer
+        app="${app%$'\r'}"
+        app="${app#"${app%%[![:space:]]*}"}"
+        app="${app%"${app##*[![:space:]]}"}"
         [ -z "$app" ] && continue
-        
-        # Pokud soubor není u uživatele, ale v systému je, zkopíruje se a hned se mu srovnají práva
-        if [ ! -f "$LOCAL_APPS/$app" ] && [ -f "/usr/share/applications/$app" ]; then
-            cp "/usr/share/applications/$app" "$LOCAL_APPS/$app"
-            chown "$REAL_USER:$REAL_USER" "$LOCAL_APPS/$app"
+        [[ "$app" == \#* || "$app" == \[* ]] && continue
+
+        if [ ! -f "$LOCAL_APPS/$app" ]; then
+            if [ -f "/usr/share/applications/$app" ]; then
+                cp "/usr/share/applications/$app" "$LOCAL_APPS/$app"
+                chown "$REAL_USER:$REAL_USER" "$LOCAL_APPS/$app"
+            else
+                echo "VAROVÁNÍ: $app není v /usr/share/applications (chybí balíček?)" >&2
+                continue
+            fi
         fi
-        
-        # Ostré smazání blokujících řádků
-        if [ -f "$LOCAL_APPS/$app" ]; then
-            sed -i '/^OnlyShowIn=/d; /^NotShowIn=/d; /^NoDisplay=/d' "$LOCAL_APPS/$app" || true
-        fi
+
+        sed -i -E '/^(OnlyShowIn|NotShowIn|NoDisplay)[[:space:]]*=/d' "$LOCAL_APPS/$app"
+        echo "OK: upraveno $app"
     done <<< "$APPS_TO_SHOW_STR"
+
+    # obnova cache menu
+    update-desktop-database "$LOCAL_APPS" 2>/dev/null || true
 
     # --- IDENTIFIKACE A UMLČENÍ ZVOLENÉHO PROHLÍŽEČE ---
     local BROWSER_DESKTOP=""
