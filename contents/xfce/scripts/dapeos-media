@@ -48,10 +48,13 @@ class MediaTray(QSystemTrayIcon):
         self.setToolTip("Vyměnitelná média")
         self.menu = QMenu()
         self.setContextMenu(self.menu)
+        self.seen = set()
+        self.initialized = False
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.scan)
-        self.timer.start(3000)
+        self.timer.start(2500)
         self.scan()
+        self.initialized = True
 
     def run(self, args):
         subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -66,6 +69,13 @@ class MediaTray(QSystemTrayIcon):
 
     def scan(self):
         devs = devices()
+        for d in devs:
+            if d["mount"] and d["dev"] not in self.seen:
+                if self.initialized and os.environ.get("DAPEOS_MEDIA_NO_OPEN") != "1":
+                    subprocess.Popen(["thunar", d["mount"]],
+                                     stdout=subprocess.DEVNULL,
+                                     stderr=subprocess.DEVNULL)
+            self.seen.add(d["dev"])
         self.menu.clear()
         if not devs:
             self.hide()
