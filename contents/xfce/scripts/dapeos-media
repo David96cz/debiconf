@@ -2,6 +2,7 @@
 # DapeOS removable media tray - cesky, ikona jen kdyz je medium pripojene.
 import json
 import os
+import re
 import time
 import subprocess
 import sys
@@ -72,7 +73,7 @@ class MediaTray(QSystemTrayIcon):
         self.first_scan = True
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.scan)
-        self.timer.start(1200)
+        self.timer.start(800)
         self.scan()
 
     def run(self, args):
@@ -90,6 +91,22 @@ class MediaTray(QSystemTrayIcon):
         subprocess.Popen(["thunar", path], stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL)
 
+    def mount_and_open(self, dev):
+        try:
+            out = subprocess.run(["udisksctl", "mount", "-b", dev],
+                                 capture_output=True, text=True, timeout=10).stdout
+        except Exception as exc:  # noqa: BLE001
+            log(f"mount error {dev}: {exc}")
+            return
+        m = re.search(r" at (.+?)\s*$", out)
+        if m:
+            path = m.group(1).strip().rstrip(".")
+            self.opened.add(dev)
+            self.pending.pop(dev, None)
+            self.open_thunar(path)
+        else:
+            log(f"mount output {dev}: {out!r}")
+
     def action_mount(self, dev):
         self.run(["udisksctl", "mount", "-b", dev])
 
@@ -104,19 +121,14 @@ class MediaTray(QSystemTrayIcon):
             if not d["mount"]:
                 if d["dev"] not in self.pending:
                     self.pending[d["dev"]] = time.time()
-                elif time.time() - self.pending[d["dev"]] > 2:
-                    log(f"fallback mount {d['dev']}")
-                    subprocess.Popen(["udisksctl", "mount", "-b", d["dev"]],
-                                     stdout=subprocess.DEVNULL,
-                                     stderr=subprocess.DEVNULL)
-                    self.pending.pop(d["dev"], None)
+                    log(f"mount {d['dev']}")
+                    self.mount_and_open(d["dev"])
             else:
                 self.pending.pop(d["dev"], None)
                 if d["dev"] not in self.opened:
                     self.opened.add(d["dev"])
                     if not self.first_scan:
-                        QTimer.singleShot(
-                            1000, lambda m=d["mount"]: self.open_thunar(m))
+                        self.open_thunar(d["mount"])
             self.seen.add(d["dev"])
         present = {d["dev"] for d in devs}
         self.opened &= present
