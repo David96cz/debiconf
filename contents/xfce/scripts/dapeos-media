@@ -49,10 +49,11 @@ class MediaTray(QSystemTrayIcon):
         self.menu = QMenu()
         self.setContextMenu(self.menu)
         self.seen = set()
+        self.pending = set()
         self.initialized = False
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.scan)
-        self.timer.start(2500)
+        self.timer.start(1200)
         self.scan()
         self.initialized = True
 
@@ -70,6 +71,11 @@ class MediaTray(QSystemTrayIcon):
     def scan(self):
         devs = devices()
         for d in devs:
+            if not d["mount"] and d["dev"] not in self.pending:
+                self.pending.add(d["dev"])
+                subprocess.Popen(["udisksctl", "mount", "-b", d["dev"]],
+                                 stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
             if d["mount"] and d["dev"] not in self.seen:
                 if self.initialized and os.environ.get("DAPEOS_MEDIA_NO_OPEN") != "1":
                     subprocess.Popen(["thunar", d["mount"]],
