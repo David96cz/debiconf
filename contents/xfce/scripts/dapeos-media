@@ -68,6 +68,8 @@ class MediaTray(QSystemTrayIcon):
         self.setContextMenu(self.menu)
         self.seen = set()
         self.pending = {}
+        self.opened = set()
+        self.first_scan = True
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.scan)
         self.timer.start(1200)
@@ -75,6 +77,18 @@ class MediaTray(QSystemTrayIcon):
 
     def run(self, args):
         subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def open_thunar(self, path):
+        try:
+            out = subprocess.run(["wmctrl", "-l"], capture_output=True,
+                                 text=True, timeout=3).stdout
+        except Exception:
+            out = ""
+        name = os.path.basename(path)
+        if name and name in out:
+            return
+        subprocess.Popen(["thunar", path], stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
 
     def action_mount(self, dev):
         self.run(["udisksctl", "mount", "-b", dev])
@@ -98,8 +112,14 @@ class MediaTray(QSystemTrayIcon):
                     self.pending.pop(d["dev"], None)
             else:
                 self.pending.pop(d["dev"], None)
+                if d["dev"] not in self.opened:
+                    self.opened.add(d["dev"])
+                    if not self.first_scan:
+                        QTimer.singleShot(
+                            1000, lambda m=d["mount"]: self.open_thunar(m))
             self.seen.add(d["dev"])
         log("devices: " + ", ".join(f"{d['dev']} mount={d['mount']}" for d in devs))
+        self.first_scan = False
         self.menu.clear()
         if not devs:
             self.hide()
