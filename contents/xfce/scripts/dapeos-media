@@ -118,6 +118,9 @@ class MediaTray(QSystemTrayIcon):
                         QTimer.singleShot(
                             1000, lambda m=d["mount"]: self.open_thunar(m))
             self.seen.add(d["dev"])
+        present = {d["dev"] for d in devs}
+        self.opened &= present
+        self.pending = {k: v for k, v in self.pending.items() if k in present}
         log("devices: " + ", ".join(f"{d['dev']} mount={d['mount']}" for d in devs))
         self.first_scan = False
         self.menu.clear()
