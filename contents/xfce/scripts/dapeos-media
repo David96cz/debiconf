@@ -119,7 +119,8 @@ class MediaTray(QSystemTrayIcon):
         devs = devices()
         for d in devs:
             if not d["mount"]:
-                if d["dev"] not in self.pending:
+                last = self.pending.get(d["dev"], 0)
+                if time.time() - last > 3:
                     self.pending[d["dev"]] = time.time()
                     log(f"mount {d['dev']}")
                     self.mount_and_open(d["dev"])
